@@ -1,6 +1,6 @@
 # GEO Audit Tool
 
-Measure how often an AI search assistant recommends a given business — its
+Measure how often an AI search assistant recommends a given business, its
 **share of voice** in generative search results.
 
 As people increasingly ask LLM-backed assistants questions like *"best barber in
@@ -84,12 +84,6 @@ python init_db.py
 # 5. run the app
 streamlit run app.py
 ```
-
----
-
-## Cost
-
-⚠️ **A full audit makes ~10 web-search calls and costs roughly 
 
 ---
 
