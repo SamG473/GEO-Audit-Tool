@@ -8,3 +8,6 @@ geo.db
 
 # local backup of a saved run — not source
 latest_run.backup.json
+
+# macOS folder metadata
+.DS_Store

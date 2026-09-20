@@ -21,6 +21,8 @@ pairs; the Results page reads it with no API calls. Detection over saved answers
 - `pages/results.py` — dashboard, 3 tabs via `st.tabs`
   ("Your visibility", "You vs competitors", "What's next").
 - `detection.py` — pure detection logic (no Streamlit).
+- `theme.py` — shared `geo-` design system (`inject_theme()`, `donut()`,
+  `app_header()`, `stepper()`, `question()`); used by both pages.
 - `init_db.py` — SQLite (`geo.db`); `leads` table live, `runs` vestigial.
 - `latest_run.json` — one saved paid run (iterate against this).
 - OpenAI Responses API, model `gpt-5.5`, `web_search` tool for audits; plain

@@ -17,6 +17,12 @@ The running example throughout is **Lazarou Barbers** — a barber in Cardiff.
 
 1. **Wizard** ([app.py](app.py)) collects the business name, category, location,
    and optional competitors.
+
+   <img src="docs/input.png" width="620" alt="Step 1 of 4 of the input wizard">
+
+   *Step 1 of 4 — the wizard takes the business name, then category, location and
+   competitors, one question per screen.*
+
 2. **Audit pipeline** (`run_audit`) asks the model **10 templated search
    queries** (e.g. *"best {category} in {location}"*, *"affordable …"*,
    *"where can I find a good …"*) with the `web_search` tool enabled, and saves
@@ -25,6 +31,12 @@ The running example throughout is **Lazarou Barbers** — a barber in Cardiff.
    shows three tabs:
    - **Your visibility** — share-of-voice gauge + which queries you appear in vs. miss.
    - **You vs competitors** — how often each business appears, and which sources the AI cited.
+
+     <img src="docs/competitors.png" width="560" alt="Competitor share of answers and cited sources">
+
+     *Appearance rate per business — 80% / 40% / 0% — above the domains the model
+     cited across all 10 answers.*
+
    - **What's next** — a recap and a lead-capture form (stored in SQLite).
 
 ---
@@ -52,6 +64,11 @@ principle is **"change the cost, not the accuracy"**:
 So ambiguous names always get the accurate (paid) path; only clearly-distinctive
 names take the free shortcut. Judge verdicts are cached on the dashboard
 (`@st.cache_data`) so repeated views don't re-pay.
+
+<img src="docs/your-visibility.png" width="620" alt="Share-of-voice gauge with matched and missed queries">
+
+*The router's verdicts rendered: 8 of 10 answers counted as a mention, with the
+matched queries and the two misses listed side by side.*
 
 ---
 
