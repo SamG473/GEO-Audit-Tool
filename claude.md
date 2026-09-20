@@ -15,10 +15,10 @@ pairs; the Results page reads it with no API calls. Detection over saved answers
 (the judge) is cheap and fine — it's the web-search calls that are expensive.
 
 ## Stack / layout
-- Python, Streamlit multipage (`pages/`). Windows, PowerShell, venv active.
+- Python, Streamlit multipage (`pages/`). macOS, zsh, venv at `venv/` (`venv/bin/streamlit`).
 - `app.py` — input wizard (`st.session_state`, one question per page) +
   `run_audit()` (the paid pipeline, has just been wired to the wizard).
-- `pages/Results.py` — dashboard, 3 tabs via `st.tabs`
+- `pages/results.py` — dashboard, 3 tabs via `st.tabs`
   ("Your visibility", "You vs competitors", "What's next").
 - `detection.py` — pure detection logic (no Streamlit).
 - `init_db.py` — SQLite (`geo.db`); `leads` table live, `runs` vestigial.
@@ -44,8 +44,9 @@ verdicts are cached (`@st.cache_data`).
   under `competitors`.
 
 ## UI / design system
-Custom theme injected as one `<style>` block in `Results.py`, all classes
-prefixed `geo-`. 
+Custom theme lives in `theme.py` as one `<style>` block, injected by both
+`app.py` and `pages/results.py` via `inject_theme()`. All classes prefixed `geo-`.
+
 primary `#2E6F95`, page white, secondary bg `#F4F6F8`, text `#1A1A1A`,
 borders `#ECEFF2`, muted `#5A6672`/`#8A95A1`, empty-track `#E1E6EB`.
 `.streamlit/config.toml` sets the matching Streamlit theme. Style with

@@ -1,7 +1,7 @@
 """Shared visual theme for the GEO Audit Tool.
 
 One source of truth for the `geo-` design system, used by both the wizard
-(`app.py`) and the dashboard (`pages/Results.py`). All classes are `geo-`
+(`app.py`) and the dashboard (`pages/results.py`). All classes are `geo-`
 prefixed so they never collide with Streamlit's own styling. Palette and the
 "whitespace + thin dividers, not heavy boxes" rule are fixed — see CLAUDE.md.
 """
