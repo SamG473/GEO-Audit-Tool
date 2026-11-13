@@ -9,7 +9,9 @@ client = OpenAI()
 LEGAL_SUFFIXES = {"ltd", "limited", "inc", "llc", "co", "plc", "company"}
 
 def distinctive_tokens(name, category, location, threshold=2.5):
-    drop = {category.lower(), category.lower() + "s", location.lower()} | LEGAL_SUFFIXES
+    # the category can be several words ("sushi restaurant"): drop each word and its plural
+    category_words = {w for c in category.lower().split() for w in (c, c + "s")}
+    drop = category_words | {location.lower()} | LEGAL_SUFFIXES
     clean = re.sub(r"[^\w\s]", " ", name.lower())
     tokens = [t for t in clean.split() if t not in drop]
     return [t for t in tokens if zipf_frequency(t, "en") < threshold]

@@ -2,31 +2,48 @@
 
 ## What this is
 A GEO (Generative Engine Optimisation) audit tool: it asks an LLM a set of
-search-style questions and measures how often a given business appears in the
-answers, producing a "share of voice" %. It's a portfolio project to land a
+customer-style questions and measures how often a given business appears in the
+answers, producing a "share of voice" %, plus a ranking of every business the
+answers mention. It's a portfolio project to land a
 software engineering placement. The reviewer ("Chris") is a senior engineer who
 values evaluation methodology, honest trade-offs/limitations, and production
 habits over visual polish — reasoning quality matters more than a slick demo.
-Test case throughout: "Lazarou Barbers", category "barber", location "Cardiff".
+Test case throughout: "Lazarou Barbers", town "Cardiff" (niche "barber").
 
 ## ⚠️ Cost — read first
 A full audit is ~10 OpenAI web-search calls and costs ~£2. `latest_run.json`, holds one real run's query→answer
 pairs; the Results page reads it with no API calls. Detection over saved answers
 (the judge) is cheap and fine — it's the web-search calls that are expensive.
+Query generation and business extraction are one `gpt-5-mini` call each (no web
+search, well under 1p). Sam approves every real call, cheap ones included.
+`python -m unittest discover -s tests` runs everything against a fake API (free).
 
 ## Stack / layout
 - Python, Streamlit multipage (`pages/`). macOS, zsh, venv at `venv/` (`venv/bin/streamlit`).
-- `app.py` — input wizard (`st.session_state`, one question per page) +
-  `run_audit()` (the paid pipeline, has just been wired to the wizard).
+- `app.py` — two-screen wizard (`st.session_state`): business name + town, then
+  a review screen for the generated queries (read-only, with an edit toggle) +
+  `run_audit()` (the paid pipeline: concurrent web searches, then extraction).
+- `querygen.py` — query-generation prompt, reply validation, business-name guard,
+  saved query sets (no Streamlit).
+- `extraction.py` — business-extraction prompt, code-side counting, ranking
+  (no Streamlit).
 - `pages/results.py` — dashboard, 3 tabs via `st.tabs`
   ("Your visibility", "You vs competitors", "What's next").
 - `detection.py` — pure detection logic (no Streamlit).
 - `theme.py` — shared `geo-` design system (`inject_theme()`, `donut()`,
   `app_header()`, `stepper()`, `question()`); used by both pages.
-- `init_db.py` — SQLite (`geo.db`); `leads` table live, `runs` vestigial.
+- `init_db.py` — SQLite (`geo.db`); `leads` and `query_sets` live, `runs` vestigial.
+- `tests/` — stdlib `unittest`, all API calls faked.
 - `latest_run.json` — one saved paid run (iterate against this).
 - OpenAI Responses API, model `gpt-5.5`, `web_search` tool for audits; plain
-  calls for the judge.
+  calls for the judge; `gpt-5-mini` for query generation and extraction.
+
+## Queries
+Five fixed intent types (best, service, constraint, situation, recommendation),
+two queries each. One cheap call infers the niche from name + town and writes
+them; they must never contain the business name (checked in code, on generated
+and edited queries). The approved set is saved per business + town in
+`query_sets`, and a rerun reuses it unchanged so runs stay comparable.
 
 ## Detection (don't redesign without asking)
 Hybrid router in `detection.py`: `distinctive_tokens()` uses wordfreq zipf
@@ -42,8 +59,12 @@ verdicts are cached (`@st.cache_data`).
 - Hybrid wordfreq routing as above. No spaCy / GLiNER / heavy NER.
 - Single saved-run dashboard, not daily tracking-over-time.
 - Results via `st.tabs`, not a separate pages/ structure for the three tabs.
-- Competitors are user-entered (wizard Q4), saved to `latest_run.json`
-  under `competitors`.
+- Competitors are extracted from the answers (one batched cheap call at audit
+  time, saved to `latest_run.json` under `businesses`), not user-entered. The
+  model only lists businesses; counts are computed in code from what literally
+  appears in the answers. The user's own count always comes from `detect()`.
+- Intent types are fixed; the queries within them are LLM-written and
+  user-editable.
 
 ## UI / design system
 Custom theme lives in `theme.py` as one `<style>` block, injected by both
@@ -62,6 +83,13 @@ come from real data or a citable source. (Avoid past mistakes: an invented
 - `cheap_match` detects presence, not endorsement; the judge backstops
   dismissive mentions.
 - Router is only safe for distinctive/coined names, by design.
+- The niche is inferred from the name alone; an unclear name opens the review
+  screen in edit mode for the owner to correct.
+- Queries are LLM-written, so two businesses get different wording: compare
+  across businesses by intent type, not by query.
+- Extraction recall is unverified: a business the model fails to list is missing
+  from the ranking. (Invented ones can't appear — they match no answer.)
+- The ranking counts mentions, not endorsements.
 
 ## How to work
 - Focused, reviewable changes — Sam reviews diffs and decides. Explain reasoning

@@ -15,28 +15,41 @@ The running example throughout is **Lazarou Barbers** — a barber in Cardiff.
 
 ## What it does
 
-1. **Wizard** ([app.py](app.py)) collects the business name, category, location,
-   and optional competitors.
+1. **Two inputs** ([app.py](app.py)): the business name and its town. Nothing else.
+2. **Query generation** ([querygen.py](querygen.py)): one cheap model call (no web
+   search) works out the niche from the name and town, then writes **10
+   customer-sounding questions**: two for each of five fixed intent types.
 
-   <img src="docs/input.png" width="620" alt="Step 1 of 4 of the input wizard">
+   | Intent type | What the customer wants |
+   |---|---|
+   | best | the best or top-rated business of this kind in town |
+   | service | one specific service |
+   | constraint | to fit a price, opening hours or location |
+   | situation | help with a particular occasion or need |
+   | recommendation | a straight "who would you recommend?" |
 
-   *Step 1 of 4 — the wizard takes the business name, then category, location and
-   competitors, one question per screen.*
-
-2. **Audit pipeline** (`run_audit`) asks the model **10 templated search
-   queries** (e.g. *"best {category} in {location}"*, *"affordable …"*,
-   *"where can I find a good …"*) with the `web_search` tool enabled, and saves
-   every query → answer (plus cited sources) to [latest_run.json](latest_run.json).
-3. **Dashboard** ([pages/results.py](pages/results.py)) reads that saved run and
+   The questions **never include the business's name**: the test is whether the
+   AI recommends it unprompted. That rule is enforced in code, not just in the
+   prompt.
+3. **Review screen**: the niche and the 10 questions are shown before anything is
+   spent. They can be edited, and if the model wasn't sure of the niche the screen
+   opens in edit mode with the niche flagged.
+4. **Saved query sets**: the approved set is stored against the business + town
+   (SQLite). Running the same business again reuses exactly the same questions,
+   so two runs are comparable.
+5. **Audit pipeline** (`run_audit`): the 10 questions go to the model with the
+   `web_search` tool, concurrently, with a live "X of 10 answered" progress bar.
+   Every query → answer (plus cited sources) is saved to
+   [latest_run.json](latest_run.json).
+6. **Competitors from the answers** ([extraction.py](extraction.py)): one more cheap
+   call lists every business the 10 answers mention. The model only *lists* them;
+   the counts are computed in code from what literally appears in each answer, so
+   a business the model invents can't reach the screen.
+7. **Dashboard** ([pages/results.py](pages/results.py)) reads the saved run and
    shows three tabs:
    - **Your visibility** — share-of-voice gauge + which queries you appear in vs. miss.
-   - **You vs competitors** — how often each business appears, and which sources the AI cited.
-
-     <img src="docs/competitors.png" width="560" alt="Competitor share of answers and cited sources">
-
-     *Appearance rate per business — 80% / 40% / 0% — above the domains the model
-     cited across all 10 answers.*
-
+   - **You vs competitors** — a ranking of every business the AI mentioned, where
+     yours sits in it, and which sources the AI cited.
    - **What's next** — a recap and a lead-capture form (stored in SQLite).
 
 ---
@@ -76,9 +89,9 @@ matched queries and the two misses listed side by side.*
 
 - **Python** + **[Streamlit](https://streamlit.io/)** (multipage: wizard + dashboard)
 - **OpenAI Responses API** — model `gpt-5.5`, `web_search` tool for audits; plain
-  calls for the judge
+  calls for the judge; `gpt-5-mini` for query generation and business extraction
 - **`wordfreq`** for the distinctiveness heuristic
-- **SQLite** ([init_db.py](init_db.py)) for captured leads
+- **SQLite** ([init_db.py](init_db.py)) for captured leads and saved query sets
 
 ---
 
@@ -100,6 +113,9 @@ python init_db.py
 
 # 5. run the app
 streamlit run app.py
+
+# run the tests (every API call is faked — free)
+python -m unittest discover -s tests
 ```
 
 ---
@@ -108,11 +124,14 @@ streamlit run app.py
 
 | File | Purpose |
 |------|---------|
-| [app.py](app.py) | Input wizard + the paid `run_audit` pipeline |
+| [app.py](app.py) | Input wizard, review screen + the paid `run_audit` pipeline |
+| [querygen.py](querygen.py) | Query-generation prompt, validation, name guard, saved query sets |
+| [extraction.py](extraction.py) | Business-extraction prompt, code-side counting, ranking |
 | [pages/results.py](pages/results.py) | Three-tab results dashboard |
 | [detection.py](detection.py) | Hybrid detection router (tokens → cheap match / LLM judge) |
 | [theme.py](theme.py) | Shared `geo-` visual design system for both pages |
-| [init_db.py](init_db.py) | Creates the SQLite schema (`leads`) |
+| [init_db.py](init_db.py) | Creates the SQLite schema (`leads`, `query_sets`) |
+| [tests/](tests/) | Unit and page tests against a fake API |
 | [latest_run.json](latest_run.json) | One saved audit — the dashboard's data source |
 | [evaluate.py](evaluate.py) | Diagnostic harness over a saved run |
 
@@ -126,5 +145,10 @@ streamlit run app.py
 - **Audit speed.** Some audits can take up to 90 seconds to load the results because of the Api calls. 
 - **Single saved run.** The dashboard shows one audit at a time, not tracking
   over time; a new audit overwrites the previous saved run.
-- **Fixed query set.** The 10 queries are templated from category + location, not
-  tailored per industry.
+- **Niche is inferred from the name.** An unclear name can be guessed wrong; the
+  review screen flags it and lets the owner correct it.
+- **Queries differ between businesses.** The intent types are fixed but the wording
+  is model-written, so compare two businesses by intent type, not query by query.
+- **Extraction recall is unverified.** A business the model fails to list is
+  missing from the ranking. (An invented one can't appear: it matches no answer.)
+- **The ranking counts mentions, not endorsements.**

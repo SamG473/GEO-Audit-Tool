@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 import streamlit as st
 from detection import detect
+from extraction import ranking
 from theme import inject_theme, donut
 
 st.set_page_config(page_title="Results · GEO Audit", page_icon="🔎", layout="centered")
@@ -19,7 +20,7 @@ except FileNotFoundError:
     st.stop()
 
 business = run["business"].strip()
-category = run["category"].strip()
+category = (run.get("niche") or run.get("category", "")).strip()   # "category" = runs saved before niches
 location = run["location"].strip()
 answers = [q["answer"] for q in run["queries"]]
 total = len(answers)
@@ -121,55 +122,74 @@ with tab1:
     )
 
 with tab2:
-    # competitors are user-entered in the wizard and saved to latest_run.json
-    competitors = [c.strip() for c in run.get("competitors", []) if c.strip()]
+    # every business the answers mention, extracted at audit time and saved with the run
+    businesses = run.get("businesses")
 
-    if not competitors:
+    if businesses is None:
         st.markdown(
-            '<div class="geo-empty">No competitors entered for this audit — add some in the '
-            'form to see how your share of AI answers compares.</div>',
+            '<div class="geo-empty">No ranking for this run — the list of businesses the AI '
+            'mentioned wasn\'t saved with it. Run a new audit to see who the AI recommends.</div>',
             unsafe_allow_html=True,
         )
     else:
-        businesses = [business] + competitors
-        counts = {b: sum(detect_cached(b, a, category, location) for a in answers) for b in businesses}
+        # your count comes from the detection router, so it always matches the first tab
+        you_count = sum(detect_cached(business, a, category, location) for a in answers)
+        rows = ranking(business, you_count, businesses)
+        you = next(r for r in rows if r["is_you"])
+        mentioned = sum(1 for r in rows if r["count"])
+        leader = rows[0]
 
-        ranked = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
-        you_count = counts[business]
-        leader_name, leader_count = ranked[0]
+        def ordinal(n):
+            suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+            return f"{n}{suffix}"
 
-        if leader_name == business:
-            headline = (f"{business} leads this set — appearing in {you_count} of {total} AI answers, "
-                        f"more than any competitor compared.")
+        if not you["count"]:
+            headline = f"{business} isn't mentioned in these answers yet."
+            if leader["count"]:
+                headline += (f" {leader['name']} appears most, in {leader['count']} of {total}.")
         else:
-            headline = (f"{business} appears in {you_count} of {total} AI answers, "
-                        f"behind {leader_name} ({leader_count}).")
+            place = ("joint " if you["joint"] else "") + ordinal(you["rank"])
+            headline = (f"{business} is {place} of the {mentioned} businesses the AI mentioned, "
+                        f"appearing in {you['count']} of {total} answers.")
+            if not leader["is_you"] and leader["count"] > you["count"]:
+                headline += f" {leader['name']} appears most ({leader['count']})."
 
         st.markdown(f'<div class="geo-headline">{escape(headline)}</div>', unsafe_allow_html=True)
 
-        # ranked comparison bars
-        bar_rows = ""
-        for rank, (name, c) in enumerate(ranked, start=1):
-            bar_pct = round(c / total * 100) if total else 0
-            is_you = name == business
-            you_cls = " is-you" if is_you else ""
-            you_tag = '<span class="geo-you-tag">You</span>' if is_you else ""
-            bar_rows += (
-                f'<div class="geo-rankbar{you_cls}">'
-                f'<div class="geo-rank">{rank}</div>'
-                f'<div class="geo-rankbar-main">'
-                f'<div class="geo-rankbar-head">'
-                f'<span class="geo-rankbar-name">{escape(name)}{you_tag}</span>'
-                f'<span class="geo-rankbar-val">{c} of {total} · {bar_pct}%</span></div>'
-                f'<div class="geo-rankbar-track"><div class="geo-rankbar-fill" style="width:{bar_pct}%"></div></div>'
-                f'</div></div>'
-            )
+        def bars(shown):
+            html = ""
+            for r in shown:
+                bar_pct = round(r["count"] / total * 100) if total else 0
+                you_cls = " is-you" if r["is_you"] else ""
+                you_tag = '<span class="geo-you-tag">You</span>' if r["is_you"] else ""
+                rank = r["rank"] if r["rank"] else "–"
+                html += (
+                    f'<div class="geo-rankbar{you_cls}">'
+                    f'<div class="geo-rank">{rank}</div>'
+                    f'<div class="geo-rankbar-main">'
+                    f'<div class="geo-rankbar-head">'
+                    f'<span class="geo-rankbar-name">{escape(r["name"])}{you_tag}</span>'
+                    f'<span class="geo-rankbar-val">{r["count"]} of {total} · {bar_pct}%</span></div>'
+                    f'<div class="geo-rankbar-track"><div class="geo-rankbar-fill" style="width:{bar_pct}%"></div></div>'
+                    f'</div></div>'
+                )
+            return html
+
+        TOP = 10
+        top = rows[:TOP]
+        if you not in top:                       # your row is always on screen
+            top.append(you)
         st.markdown(
-            f'<div class="geo-section-title">Share of AI answers</div>'
-            f'<div class="geo-section-sub">How often each business appears across the {total} queries</div>'
-            f'{bar_rows}',
+            f'<div class="geo-section-title">Who the AI recommends</div>'
+            f'<div class="geo-section-sub">How many of the {total} answers mention each business. '
+            f'A mention isn\'t always an endorsement.</div>'
+            f'{bars(top)}',
             unsafe_allow_html=True,
         )
+        rest = [r for r in rows[TOP:] if not r["is_you"]]
+        if rest:
+            with st.expander(f"Show the other {len(rest)} businesses mentioned"):
+                st.markdown(bars(rest), unsafe_allow_html=True)
 
     # where the AI gets its answers — sources cited (empty until a live audit captures them)
     source_counts = {}

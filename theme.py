@@ -84,6 +84,17 @@ _STYLE = """
 .geo-review-val { font-size: 14px; color: #1A1A1A; font-weight: 600; text-align: right; }
 
 /* ---- dashboard: shared ---- */
+.geo-note {
+  font-size: 13px; color: #5A6672; background: #F4F6F8; border-radius: 8px;
+  padding: 8px 12px; margin: 6px 0 4px 0;
+}
+.geo-intent {
+  font-size: 12px; font-weight: 600; color: #8A95A1; text-transform: uppercase;
+  letter-spacing: 0.04em; margin: 16px 0 4px 0;
+}
+.geo-query {
+  font-size: 14px; color: #1A1A1A; padding: 7px 0; border-bottom: 1px solid #ECEFF2;
+}
 .geo-section-title { font-size: 15px; font-weight: 600; color: #1A1A1A; margin: 30px 0 2px 0; }
 .geo-section-sub { font-size: 13px; color: #5A6672; margin-bottom: 10px; }
 .geo-nudge {
