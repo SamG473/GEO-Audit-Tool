@@ -63,8 +63,16 @@ Rules:
   The queries must work for a customer who has never heard of this business.
 - Every query must name {town} or a well-known area of it, because the assistant
   will not know where the customer is.
-- Write the way people type to a chatbot: natural, conversational, first person
-  where it fits, 8 to 25 words. Not keyword strings. Vary how the queries open.
+- Write the way people actually type to a chatbot: plain everyday words, a bit
+  informal, first person where it fits, 5 to 25 words. Not keyword strings. Some
+  can say what the person needs and then ask.
+- No sales language. Customers do not write like adverts: leave out words such
+  as "skilled", "reliable", "quality", "beautifully" or "friendly".
+- Mix the openings across the ten: for example What, Which, Where, Who, Can
+  you, Is there, Any, I need, I'm looking for. Use no opening word more than
+  twice.
+- Keep the best and recommendation queries general: do not add a specific
+  service, price or occasion to them.
 - One question per query. No lists, no follow-up questions, no quotation marks.
 - Use the spelling and vocabulary normal for where {town} is.
 - Only mention services and details that are typical for this kind of business.
