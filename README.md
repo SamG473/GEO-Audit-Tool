@@ -89,7 +89,7 @@ matched queries and the two misses listed side by side.*
 
 - **Python** + **[Streamlit](https://streamlit.io/)** (multipage: wizard + dashboard)
 - **OpenAI Responses API** — model `gpt-5.5`, `web_search` tool for audits; plain
-  calls for the judge; `gpt-5-mini` for query generation and business extraction
+  calls for the judge; `gpt-6-luna` for query generation and business extraction
 - **`wordfreq`** for the distinctiveness heuristic
 - **SQLite** ([init_db.py](init_db.py)) for captured leads and saved query sets
 

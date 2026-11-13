@@ -14,7 +14,7 @@ Test case throughout: "Lazarou Barbers", town "Cardiff" (niche "barber").
 A full audit is ~10 OpenAI web-search calls and costs ~£2. `latest_run.json`, holds one real run's query→answer
 pairs; the Results page reads it with no API calls. Detection over saved answers
 (the judge) is cheap and fine — it's the web-search calls that are expensive.
-Query generation and business extraction are one `gpt-5-mini` call each (no web
+Query generation and business extraction are one `gpt-6-luna` call each (no web
 search, well under 1p). Sam approves every real call, cheap ones included.
 `python -m unittest discover -s tests` runs everything against a fake API (free).
 
@@ -36,7 +36,7 @@ search, well under 1p). Sam approves every real call, cheap ones included.
 - `tests/` — stdlib `unittest`, all API calls faked.
 - `latest_run.json` — one saved paid run (iterate against this).
 - OpenAI Responses API, model `gpt-5.5`, `web_search` tool for audits; plain
-  calls for the judge; `gpt-5-mini` for query generation and extraction.
+  calls for the judge; `gpt-6-luna` for query generation and extraction.
 
 ## Queries
 Five fixed intent types (best, service, constraint, situation, recommendation),

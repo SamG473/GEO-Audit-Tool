@@ -34,7 +34,7 @@ def by_name(businesses):
 class PromptTest(unittest.TestCase):
     def test_answers_are_numbered_and_request_is_cheap(self):
         kwargs = extraction.request_kwargs("barber", "Cardiff", ANSWERS)
-        self.assertEqual(kwargs["model"], "gpt-5-mini")
+        self.assertEqual(kwargs["model"], "gpt-6-luna")
         self.assertNotIn("tools", kwargs)
         self.assertIn("Below are 5 answers", kwargs["input"])
         self.assertIn("[1] For a classic cut", kwargs["input"])

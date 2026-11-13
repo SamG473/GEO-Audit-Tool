@@ -40,7 +40,7 @@ class PromptTest(unittest.TestCase):
 
     def test_request_is_cheap_model_without_web_search(self):
         kwargs = querygen.request_kwargs("Lazarou Barbers", "Cardiff")
-        self.assertEqual(kwargs["model"], "gpt-5-mini")
+        self.assertEqual(kwargs["model"], "gpt-6-luna")
         self.assertNotIn("tools", kwargs)
         self.assertTrue(kwargs["text"]["format"]["strict"])
 

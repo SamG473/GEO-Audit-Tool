@@ -13,7 +13,7 @@ import re
 import detection
 from detection import LEGAL_SUFFIXES
 
-MODEL = "gpt-5-mini"
+MODEL = "gpt-6-luna"
 MIN_VARIANT_CHARS = 3        # shorter spellings match too much by accident
 
 _PROMPT = """Below are {n} answers an AI assistant gave to customer questions about

@@ -13,7 +13,7 @@ from datetime import datetime
 
 from detection import LEGAL_SUFFIXES, distinctive_tokens
 
-MODEL = "gpt-5-mini"
+MODEL = "gpt-6-luna"
 PER_INTENT = 2
 
 # (key saved with each query, label shown on the review screen) — fixed, so every
