@@ -10,6 +10,10 @@ import modes
 from extraction import ranking
 from theme import inject_theme, demo_banner, donut
 
+# The "Book a consultation" link under the lead form. Live mode only, and hidden
+# while this is empty: put the real Calendly link here to show it.
+CONSULTATION_URL = ""
+
 st.set_page_config(page_title="Results · GEO Audit", page_icon="🔎", layout="centered")
 inject_theme()
 
@@ -127,13 +131,6 @@ with tab1:
             unsafe_allow_html=True,
         )
 
-    # nudge across to the competitors tab
-    st.markdown(
-        '<div class="geo-nudge">Next: see how you compare with other businesses in the '
-        '<b>You vs competitors</b> tab above.</div>',
-        unsafe_allow_html=True,
-    )
-
 with tab2:
     # every business the answers mention, extracted at audit time and saved with the run
     businesses = run.get("businesses")
@@ -249,13 +246,6 @@ with tab2:
         unsafe_allow_html=True,
     )
 
-    # nudge across to the what's-next tab
-    st.markdown(
-        '<div class="geo-nudge">Next: get the full breakdown in the '
-        '<b>What\'s next</b> tab above.</div>',
-        unsafe_allow_html=True,
-    )
-
 with tab3:
     missing = [" ".join(q["query"].split()) for q in run["queries"]
                if not detect_cached(business, q["answer"], category, location)]
@@ -273,12 +263,16 @@ with tab3:
     )
 
     with st.container(border=True):
+        if DEMO:
+            st.markdown('<div class="geo-note">In a live audit, this is where a business leaves '
+                        'its details.</div>', unsafe_allow_html=True)
         with st.form("lead_form"):
-            name = st.text_input("Your name")
-            email = st.text_input("Your email")
-            submitted = st.form_submit_button("Send me the breakdown", type="primary")
+            # in the demo the form is a locked example: filled in, greyed out, nothing can be sent
+            name = st.text_input("Your name", value="Jane Smith" if DEMO else "", disabled=DEMO)
+            email = st.text_input("Your email", value="jane@example.com" if DEMO else "", disabled=DEMO)
+            submitted = st.form_submit_button("Send me the breakdown", type="primary", disabled=DEMO)
 
-    if submitted:
+    if submitted and not DEMO:
         if "@" not in email or "." not in email:
             st.error("That doesn't look like a valid email. Please check it.")
         else:
@@ -293,7 +287,8 @@ with tab3:
             conn.close()
             st.success("Thanks. We'll be in touch with your full breakdown.")
 
-    st.caption("Prefer to talk it through? [Book a consultation](https://calendly.com/your-link)")
+    if CONSULTATION_URL and not DEMO:
+        st.caption(f"Prefer to talk it through? [Book a consultation]({CONSULTATION_URL})")
 
 # back to the first screen for another run; the mode (demo or live) is kept
 if st.button("Start again", key="btn_restart"):

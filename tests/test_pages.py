@@ -390,6 +390,46 @@ class ResultsPageTest(TempDirTest):
     def test_live_results_carry_no_demo_label(self):
         self.assertNotIn(modes.DEMO_LABEL, self.render(self.new_run([])))
 
+    def test_demo_lead_form_is_a_locked_example_that_cannot_submit(self):
+        FakeAPI().install()
+        at = AppTest.from_file(os.path.join(REPO, "pages", "results.py"), default_timeout=30).run()
+        self.assertFalse(at.exception, [e.value for e in at.exception])
+        fields = {t.label: t for t in at.text_input}
+        self.assertEqual((fields["Your name"].value, fields["Your email"].value),
+                         ("Jane Smith", "jane@example.com"))
+        self.assertTrue(fields["Your name"].disabled and fields["Your email"].disabled)
+        send = next(b for b in at.button if b.label == "Send me the breakdown")
+        self.assertTrue(send.disabled)
+        self.assertIn("In a live audit, this is where a business leaves its details.", html(at))
+
+        send.click().run()                                             # even a forced submit saves nothing
+        self.assertFalse(at.exception, [e.value for e in at.exception])
+        self.assertEqual(len(at.success), 0)
+        self.assertFalse(os.path.exists("geo.db"))
+
+    def test_live_lead_form_is_empty_and_usable(self):
+        FakeAPI().install()
+        with open("latest_run.json", "w", encoding="utf-8") as f:
+            json.dump(self.new_run([]), f)
+        at = AppTest.from_file(os.path.join(REPO, "pages", "results.py"), default_timeout=30)
+        at.session_state["mode"] = "live"
+        at.run()
+        fields = {t.label: t for t in at.text_input}
+        self.assertEqual((fields["Your name"].value, fields["Your email"].value), ("", ""))
+        self.assertFalse(fields["Your name"].disabled or fields["Your email"].disabled)
+        send = next(b for b in at.button if b.label == "Send me the breakdown")
+        self.assertFalse(send.disabled)
+        self.assertNotIn("this is where a business leaves its details", html(at))
+
+    def test_no_consultation_link_or_next_banners_in_either_mode(self):
+        demo = AppTest.from_file(os.path.join(REPO, "pages", "results.py"), default_timeout=30).run()
+        live_page = self.render(self.new_run([]))
+        for page, captions in ((html(demo), demo.caption), (live_page, [])):
+            self.assertNotIn("Next:", page)
+            self.assertNotIn('class="geo-nudge"', page)
+            self.assertNotIn("calendly", page.lower())
+            self.assertFalse(any("consultation" in c.value.lower() for c in captions))
+
     def test_run_without_extraction_shows_empty_state(self):
         self.assertIn("No ranking for this run", self.render(self.new_run(None)))
 
