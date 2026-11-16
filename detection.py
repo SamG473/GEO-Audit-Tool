@@ -4,7 +4,18 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
-client = OpenAI()
+
+_client = None
+
+
+def get_client():
+    """The OpenAI client, created on first use. Importing this module must work
+    with no API key (demo mode never calls the judge), so it isn't built at import."""
+    global _client
+    if _client is None:
+        _client = OpenAI()
+    return _client
+
 
 LEGAL_SUFFIXES = {"ltd", "limited", "inc", "llc", "co", "plc", "company"}
 
@@ -37,7 +48,7 @@ Answer with a single word — "yes" if the business appears, or "no" if it does 
 
 Text:
 {answer}"""
-    response = client.responses.create(model="gpt-5.5", input=prompt)
+    response = get_client().responses.create(model="gpt-5.5", input=prompt)
     return response.output_text.strip().lower().startswith("y")
 
 def detect(name, answer, category, location):

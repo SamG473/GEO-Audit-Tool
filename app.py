@@ -4,6 +4,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import json
 import random
+import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime
@@ -28,10 +29,23 @@ DEMO_GAPS = [1.2, 0.5, 0.9, 0.4, 1.0, 0.6, 0.8, 0.5, 0.9, 0.7]
 DEMO_EXTRACT_SECONDS = 1.5
 DEMO_WRITE_SECONDS = 1.5
 
-# SDK retries are off because the SDK retries every 429 — including "out of
-# credits", which can never succeed. create_with_retry() does the retrying instead
-# so it can tell a rate limit (retry) from a quota/auth failure (give up at once).
-client = OpenAI(max_retries=0)
+_client = None
+_client_lock = threading.Lock()
+
+
+def get_client():
+    """The OpenAI client, created the first time a live audit needs it. The app
+    must start with no API key set (demo mode makes no calls), so it is never
+    built at import.
+
+    SDK retries are off because the SDK retries every 429 — including "out of
+    credits", which can never succeed. create_with_retry() does the retrying
+    instead so it can tell a rate limit (retry) from a quota/auth failure."""
+    global _client
+    with _client_lock:                               # the searches ask for it from 10 threads at once
+        if _client is None:
+            _client = OpenAI(max_retries=0)
+        return _client
 
 QUOTA_CODES = {"insufficient_quota", "credit_balance_exhausted", "billing_hard_limit_reached"}
 
@@ -57,9 +71,13 @@ def create_with_retry(label, **kwargs):
     `label` only identifies the call in the retry log."""
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            return client.responses.create(**kwargs)
-        except (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError,
-                openai.AuthenticationError, openai.PermissionDeniedError) as e:
+            return get_client().responses.create(**kwargs)
+        except openai.OpenAIError as e:
+            if not isinstance(e, openai.APIError):   # raised building the client: no API key configured
+                raise FatalAPIError("No OpenAI API key is set. Add OPENAI_API_KEY, then try again.") from e
+            if not isinstance(e, (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError,
+                                  openai.AuthenticationError, openai.PermissionDeniedError)):
+                raise
             reason = fatal_reason(e)
             if reason:
                 raise FatalAPIError(reason) from e
