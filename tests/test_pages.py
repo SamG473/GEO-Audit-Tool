@@ -421,14 +421,17 @@ class ResultsPageTest(TempDirTest):
         self.assertFalse(send.disabled)
         self.assertNotIn("this is where a business leaves its details", html(at))
 
-    def test_start_again_sits_outside_the_tabs_so_every_tab_shows_it(self):
+    def test_start_again_is_only_at_the_bottom_of_the_whats_next_tab(self):
         FakeAPI().install()
         at = AppTest.from_file(os.path.join(REPO, "pages", "results.py"), default_timeout=30).run()
+        visibility, competitors, whats_next = at.tabs
         self.assertEqual([t.label for t in at.tabs], ["Your visibility", "You vs competitors", "What's next"])
-        for tab in at.tabs:
-            self.assertNotIn("btn_restart", [b.key for b in tab.button])
+        self.assertNotIn("btn_restart", [b.key for b in visibility.button])
+        self.assertNotIn("btn_restart", [b.key for b in competitors.button])
+        self.assertEqual(whats_next.button[-1].key, "btn_restart")          # after the form's own button
         self.assertEqual([b.key for b in at.button].count("btn_restart"), 1)
-        self.assertEqual(at.button[-1].key, "btn_restart")                  # last thing on the page
+        self.assertEqual(at.button[-1].key, "btn_restart")                  # nothing after it on the page
+        self.assertIn("geo-spacer", whats_next.markdown[-1].value)          # gap between the card and the button
 
     def test_no_consultation_link_or_next_banners_in_either_mode(self):
         demo = AppTest.from_file(os.path.join(REPO, "pages", "results.py"), default_timeout=30).run()

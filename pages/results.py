@@ -290,8 +290,9 @@ with tab3:
     if CONSULTATION_URL and not DEMO:
         st.caption(f"Prefer to talk it through? [Book a consultation]({CONSULTATION_URL})")
 
-# Back to the first screen for another run; the mode (demo or live) is kept.
-# This sits outside the tabs on purpose, so it shows under whichever tab is open.
-if st.button("Start again", key="btn_restart"):
-    modes.reset_wizard(st.session_state)
-    st.switch_page("app.py")
+    # Back to the first screen for another run; the mode (demo or live) is kept.
+    # Last thing on the What's next tab only, with a gap so it sits clear of the card.
+    st.markdown('<div class="geo-spacer"></div>', unsafe_allow_html=True)
+    if st.button("Start again", key="btn_restart"):
+        modes.reset_wizard(st.session_state)
+        st.switch_page("app.py")

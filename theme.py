@@ -133,6 +133,8 @@ _STYLE = """
 .geo-run-row.is-queued .geo-pulse { animation: none; background: transparent; border: 2px solid #B8C2CC; }
 .geo-run-divider { height: 10px; }
 
+.geo-spacer { height: 28px; }
+
 /* ---- demo label (every screen in demo mode) ---- */
 .geo-demo {
   font-size: 13px; font-weight: 600; color: #2E6F95; background: #F4F6F8;
