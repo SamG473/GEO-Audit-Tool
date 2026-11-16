@@ -60,8 +60,8 @@ class WizardTest(TempDirTest):
         self.assertFalse(at.toggle(key="editing").value)
         self.assertEqual(len(at.text_input), 0)                       # nothing editable yet
         page = html(at)
-        self.assertIn("Niche", page)
-        self.assertIn("barber", page)
+        self.assertIn('<span class="geo-review-val">Barber</span>', page)   # capitalised for display only
+        self.assertEqual(at.session_state["qs"]["niche"], "barber")         # stored niche unchanged
         for _, label in querygen.INTENTS:
             self.assertIn(label, page)
         for q in QUERIES:
@@ -99,7 +99,7 @@ class WizardTest(TempDirTest):
         self.assertEqual(self.api.count("generate"), 2)
         self.assertIn('"hair salon"', self.api.calls[-1][1]["input"])
         self.assertFalse(at.toggle(key="editing").value)              # owner's niche → confident
-        self.assertIn("hair salon", html(at))
+        self.assertIn("Hair salon", html(at))                         # shown capitalised, stored lowercase
         at.toggle(key="editing").set_value(True).run()                # edit fields show the new set
         self.assertEqual(field(at, "Question 1").value, "Salon question 0 in Cardiff?")
         self.assertEqual(field(at, "Niche (the kind of business)").value, "hair salon")
@@ -420,6 +420,15 @@ class ResultsPageTest(TempDirTest):
         send = next(b for b in at.button if b.label == "Send me the breakdown")
         self.assertFalse(send.disabled)
         self.assertNotIn("this is where a business leaves its details", html(at))
+
+    def test_start_again_sits_outside_the_tabs_so_every_tab_shows_it(self):
+        FakeAPI().install()
+        at = AppTest.from_file(os.path.join(REPO, "pages", "results.py"), default_timeout=30).run()
+        self.assertEqual([t.label for t in at.tabs], ["Your visibility", "You vs competitors", "What's next"])
+        for tab in at.tabs:
+            self.assertNotIn("btn_restart", [b.key for b in tab.button])
+        self.assertEqual([b.key for b in at.button].count("btn_restart"), 1)
+        self.assertEqual(at.button[-1].key, "btn_restart")                  # last thing on the page
 
     def test_no_consultation_link_or_next_banners_in_either_mode(self):
         demo = AppTest.from_file(os.path.join(REPO, "pages", "results.py"), default_timeout=30).run()

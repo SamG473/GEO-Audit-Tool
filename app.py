@@ -457,8 +457,11 @@ elif st.session_state.step == 2:
                     q["query"] = st.text_input(f"Question {i + 1}", value=q["query"], key=f"q_{gen}_{i}",
                                                label_visibility="collapsed").strip()
         else:
+            # capital first letter for display only; the stored niche stays as it is,
+            # because it is used inside sentences and prompts
+            shown_niche = qs["niche"][:1].upper() + qs["niche"][1:]
             rows = (f'<div class="geo-review-row"><span class="geo-review-label">Niche</span>'
-                    f'<span class="geo-review-val">{escape(qs["niche"])}</span></div>')
+                    f'<span class="geo-review-val">{escape(shown_niche)}</span></div>')
             for intent, label in querygen.INTENTS:
                 rows += f'<div class="geo-intent">{escape(label)}</div>'
                 rows += "".join(f'<div class="geo-query">{escape(q["query"])}</div>'

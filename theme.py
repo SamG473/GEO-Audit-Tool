@@ -142,10 +142,6 @@ _STYLE = """
 
 .geo-section-title { font-size: 15px; font-weight: 600; color: #1A1A1A; margin: 30px 0 2px 0; }
 .geo-section-sub { font-size: 13px; color: #5A6672; margin-bottom: 10px; }
-.geo-nudge {
-  background: #F4F6F8; border: 1px solid #ECEFF2; border-radius: 12px;
-  padding: 16px 20px; margin-top: 30px; font-size: 14px; color: #2E6F95; font-weight: 600;
-}
 .geo-headline {
   background: #F4F6F8; border: 1px solid #ECEFF2; border-radius: 14px;
   padding: 20px 24px; font-size: 15px; color: #1A1A1A; margin-bottom: 8px;
