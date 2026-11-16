@@ -6,18 +6,26 @@ from urllib.parse import urlparse
 
 import streamlit as st
 from detection import detect
+import modes
 from extraction import ranking
-from theme import inject_theme, donut
+from theme import inject_theme, demo_banner, donut
 
 st.set_page_config(page_title="Results · GEO Audit", page_icon="🔎", layout="centered")
 inject_theme()
 
-try:
-    with open("latest_run.json", "r", encoding="utf-8") as f:
-        run = json.load(f)
-except FileNotFoundError:
-    st.info("No audit yet — run one on the main page first.")
-    st.stop()
+# The saved live run is only shown to a session that has unlocked live audits;
+# everyone else gets the canned demo audit, clearly labelled.
+DEMO = not (st.session_state.get("mode") == "live" and modes.audit_password())
+if DEMO:
+    demo_banner(modes.DEMO_LABEL)
+    run = modes.load_demo_run()
+else:
+    try:
+        with open("latest_run.json", "r", encoding="utf-8") as f:
+            run = json.load(f)
+    except FileNotFoundError:
+        st.info("No audit yet. Run one from the first page.")
+        st.stop()
 
 business = run["business"].strip()
 category = (run.get("niche") or run.get("category", "")).strip()   # "category" = runs saved before niches
@@ -66,7 +74,7 @@ with tab1:
 
     # hero: donut gauge + plain-language summary
     note = (f"{gap} of the {total} test queries don't mention you yet."
-            if gap else "You appear in every query tested — full coverage.")
+            if gap else "You appear in every query we tested.")
     st.markdown(
         f'<div class="geo-hero">'
         f'{donut(pct, "visible")}'
@@ -97,7 +105,7 @@ with tab1:
         )
     else:
         miss_items = ('<div class="geo-item is-hit"><span class="geo-item-dot"></span>'
-                      '<span>Full coverage — you appear in every query.</span></div>')
+                      '<span>You appear in every query.</span></div>')
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -121,7 +129,7 @@ with tab1:
 
     # nudge across to the competitors tab
     st.markdown(
-        '<div class="geo-nudge">→ Next: see how you stack up against your competitors in the '
+        '<div class="geo-nudge">Next: see how you compare with other businesses in the '
         '<b>You vs competitors</b> tab above.</div>',
         unsafe_allow_html=True,
     )
@@ -132,7 +140,7 @@ with tab2:
 
     if businesses is None:
         st.markdown(
-            '<div class="geo-empty">No ranking for this run — the list of businesses the AI '
+            '<div class="geo-empty">No ranking for this run. The list of businesses the AI '
             'mentioned wasn\'t saved with it. Run a new audit to see who the AI recommends.</div>',
             unsafe_allow_html=True,
         )
@@ -167,7 +175,7 @@ with tab2:
                 bar_pct = round(r["count"] / total * 100) if total else 0
                 you_cls = " is-you" if r["is_you"] else ""
                 you_tag = '<span class="geo-you-tag">You</span>' if r["is_you"] else ""
-                rank = r["rank"] if r["rank"] else "–"
+                rank = r["rank"] if r["rank"] else "·"
                 html += (
                     f'<div class="geo-rankbar{you_cls}">'
                     f'<div class="geo-rank">{rank}</div>'
@@ -229,19 +237,21 @@ with tab2:
             for rank, (domain, data) in enumerate(ranked_sources, start=1)
         )
     else:
-        src_rows = ('<div class="geo-empty">No source data in this run yet — citations are captured '
-                    'when you run a live audit. Re-run one and the sites the AI pulled from will list here.</div>')
+        src_rows = ('<div class="geo-empty">The demo has no source list. In a live audit, the sites '
+                    'the AI cited are listed here.</div>' if DEMO else
+                    '<div class="geo-empty">This run has no source data. Run a new audit '
+                    'and the sites the AI used will be listed here.</div>')
 
     st.markdown(
         f'<div class="geo-section-title">Where the AI gets its answers</div>'
-        f'<div class="geo-section-sub">Sources cited across all {total} answers — the sites shaping your visibility</div>'
+        f'<div class="geo-section-sub">The sites the AI cited across all {total} answers</div>'
         f'{src_rows}',
         unsafe_allow_html=True,
     )
 
     # nudge across to the what's-next tab
     st.markdown(
-        '<div class="geo-nudge">→ Next: turn this into an action plan in the '
+        '<div class="geo-nudge">Next: get the full breakdown in the '
         '<b>What\'s next</b> tab above.</div>',
         unsafe_allow_html=True,
     )
@@ -270,7 +280,7 @@ with tab3:
 
     if submitted:
         if "@" not in email or "." not in email:
-            st.error("That doesn't look like a valid email — mind checking it?")
+            st.error("That doesn't look like a valid email. Please check it.")
         else:
             conn = sqlite3.connect("geo.db")
             conn.execute(
@@ -281,6 +291,11 @@ with tab3:
             )
             conn.commit()
             conn.close()
-            st.success("Got it — we'll be in touch with your full breakdown.")
+            st.success("Thanks. We'll be in touch with your full breakdown.")
 
     st.caption("Prefer to talk it through? [Book a consultation](https://calendly.com/your-link)")
+
+# back to the first screen for another run; the mode (demo or live) is kept
+if st.button("Start again", key="btn_restart"):
+    modes.reset_wizard(st.session_state)
+    st.switch_page("app.py")

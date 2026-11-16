@@ -10,8 +10,9 @@ from datetime import datetime
 from html import escape
 
 import extraction
+import modes
 import querygen
-from theme import inject_theme, app_header, stepper, question
+from theme import inject_theme, app_header, demo_banner, stepper, question
 
 st.set_page_config(page_title="GEO Audit Tool", page_icon="🔎", layout="centered")
 inject_theme()
@@ -21,6 +22,11 @@ load_dotenv()
 MAX_WORKERS = 10        # concurrent web-search calls; lower this if you hit rate limits
 MAX_ATTEMPTS = 6        # per call: 1 try + 5 retries, backoff ~1+2+4+8+16s (plus jitter)
 TICK = 0.25             # seconds between progress refreshes while waiting on the API
+
+# demo pacing: seconds before each canned answer "arrives" (7.5s), then extraction — about 9s in all
+DEMO_GAPS = [1.2, 0.5, 0.9, 0.4, 1.0, 0.6, 0.8, 0.5, 0.9, 0.7]
+DEMO_EXTRACT_SECONDS = 1.5
+DEMO_WRITE_SECONDS = 1.5
 
 # SDK retries are off because the SDK retries every 429 — including "out of
 # credits", which can never succeed. create_with_retry() does the retrying instead
@@ -198,11 +204,17 @@ def run_audit(business, niche, town, queries, report=None):
 app_header("GEO Audit Tool", "See how often AI search results recommend a business.")
 
 STEP_LABELS = ["Your business", "Review questions", "Running audit"]
-SAVED_RUN = "latest_run.json"
 
 if "step" not in st.session_state:
     st.session_state.step = 1
     st.session_state.answers = {}
+
+# Every visitor starts in demo mode (canned data, zero API calls). Live audits cost
+# money, so they need AUDIT_PASSWORD to be set AND entered in this session; this
+# one flag gates every path that can reach the API.
+DEMO = not (st.session_state.get("mode") == "live" and modes.audit_password())
+if DEMO:
+    demo_banner(modes.DEMO_LABEL)
 
 ans = st.session_state.answers
 
@@ -226,15 +238,21 @@ def fmt_elapsed(seconds):
     return f"{minutes}:{secs:02d}"
 
 
-def write_queries(business, town, niche=None):
+def write_queries(business, town, niche=None, canned=None):
     """Generate a query set with a visible, ticking "working" panel. On failure,
-    shows a calm error and stops the page."""
+    shows a calm error and stops the page. In demo mode pass `canned`: it is
+    returned after a short pause and the model is never called."""
+    def canned_after_pause():
+        time.sleep(DEMO_WRITE_SECONDS)
+        return canned
+
     panel = st.empty()
     started = time.perf_counter()
     shown = None
     # the call runs on a worker so this thread can keep the clock moving
     with ThreadPoolExecutor(max_workers=1) as pool:
-        job = pool.submit(generate_queries, business, town, niche)
+        job = (pool.submit(canned_after_pause) if canned is not None
+               else pool.submit(generate_queries, business, town, niche))
         while True:
             clock = fmt_elapsed(time.perf_counter() - started)
             if clock != shown:
@@ -261,15 +279,6 @@ def write_queries(business, town, niche=None):
     st.stop()
 
 
-def load_saved_run():
-    """The saved run, or None if there isn't a readable one."""
-    try:
-        with open(SAVED_RUN, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
-
-
 def start_job(kind, **details):
     """Hand over to the loading page. The job is marked "pending" exactly once, so
     a page rerun can never start (and pay for) the same audit twice."""
@@ -292,7 +301,7 @@ def loading_page(title, sub, queries, note=None):
     marks = {
         "waiting": ('is-waiting', '<span class="geo-pulse"></span>', "Waiting"),
         "done": ('is-done', '<span class="geo-tick">✓</span>', "Done"),
-        "failed": ('is-failed', '<span class="geo-dash">–</span>', "No answer"),
+        "failed": ('is-failed', '<span class="geo-dash">×</span>', "No answer"),
     }
 
     def row(cls, mark, text, state):
@@ -323,9 +332,9 @@ def loading_page(title, sub, queries, note=None):
     return report
 
 
-def replay_sample(run, report):
-    """Play a saved run back through the loading page. No API calls: the answers
-    already exist, they just "arrive" one at a time at a fixed, sped-up pace."""
+def replay_demo(run, report):
+    """Play the canned demo audit through the loading page. No API calls: the
+    answers already exist, they just "arrive" one at a time over DEMO_GAPS."""
     statuses = ["waiting"] * len(run["queries"])
     order = list(range(len(statuses)))
     random.Random(0).shuffle(order)                  # arrive out of order, like a live run
@@ -334,18 +343,54 @@ def replay_sample(run, report):
         end = time.perf_counter() + seconds
         while time.perf_counter() < end:
             report(statuses, stage)
-            time.sleep(TICK)
+            time.sleep(min(TICK, max(0.0, end - time.perf_counter())))
 
-    for i in order:
-        pause(0.5, "searching")
+    for n, i in enumerate(order):
+        pause(DEMO_GAPS[n % len(DEMO_GAPS)], "searching")
         statuses[i] = "done"
     report(statuses, "searching")
-    if run.get("businesses") is not None:
-        pause(1.5, "extracting")
+    pause(DEMO_EXTRACT_SECONDS, "extracting")
     report(statuses, "finished")
 
 
-if st.session_state.step == 1:
+def set_mode(mode):
+    """Switch between demo and live, starting the wizard afresh. Runs as a button
+    callback, i.e. before the page is redrawn."""
+    st.session_state.mode = mode
+    modes.reset_wizard(st.session_state)
+
+
+def try_unlock():
+    """Button callback: switch to live audits if the typed password is right."""
+    if modes.password_ok(st.session_state.get("in_password", "")):
+        set_mode("live")
+    else:
+        st.session_state.bad_password = True
+
+
+if st.session_state.step == 1 and DEMO:
+    demo = modes.load_demo_run()
+    with st.container(border=True):
+        question("Step 1 of 2", "Which business are we checking?",
+                 "The demo uses a made-up business, so these are filled in for you. "
+                 "Next we work out what kind of business it is and write the test questions.")
+        st.text_input("Business name", value=demo["business"], disabled=True, key="demo_business")
+        st.text_input("Town or city", value=demo["location"], disabled=True, key="demo_town")
+        _, col2 = st.columns(2)
+        if col2.button("Write my questions", type="primary", use_container_width=True, key="btn_write"):
+            ans["business"], ans["town"] = demo["business"], demo["location"]
+            canned = {"niche": demo["niche"], "niche_confident": True, "saved_at": None,
+                      "queries": [{"intent": q["intent"], "query": q["query"]} for q in demo["queries"]]}
+            open_review(write_queries(demo["business"], demo["location"], canned=canned))
+
+    if modes.audit_password():                       # live audits exist only if the owner enabled them
+        with st.expander("Run a live audit (password needed)"):
+            st.text_input("Password", type="password", key="in_password")
+            st.button("Continue", key="btn_unlock", on_click=try_unlock)
+            if st.session_state.pop("bad_password", False):
+                st.warning("That password isn't right.")
+
+elif st.session_state.step == 1:
     with st.container(border=True):
         question("Step 1 of 2", "Which business are we checking?",
                  "We'll work out what kind of business it is and write the test questions for you.")
@@ -366,16 +411,7 @@ if st.session_state.step == 1:
                     query_set["saved_at"] = None
                 open_review(query_set)
 
-    sample = load_saved_run()
-    if sample and sample.get("queries"):
-        st.markdown(
-            f'<div class="geo-nudge">Just looking? Watch a saved audit of '
-            f'<b>{escape(sample["business"])}</b> in {escape(sample.get("location", ""))} play back. '
-            f'It makes no live searches.</div>',
-            unsafe_allow_html=True,
-        )
-        if st.button("Watch a sample audit", key="btn_sample"):
-            start_job("sample")
+    st.button("Back to the demo", key="btn_demo", on_click=set_mode, args=("demo",))
 
 elif st.session_state.step == 2:
     qs = st.session_state.qs
@@ -384,8 +420,8 @@ elif st.session_state.step == 2:
 
     with st.container(border=True):
         question("Step 2 of 2", "Review your test questions",
-                 "These are the questions we'll put to the AI. Your business name is left out on "
-                 "purpose: the test is whether the AI recommends you unprompted.")
+                 "These are the questions we'll ask the AI. Your business name is left out on "
+                 "purpose. We want to see if the AI recommends you without being asked.")
 
         if qs.get("saved_at"):
             st.markdown(
@@ -396,7 +432,8 @@ elif st.session_state.step == 2:
 
         if "open_editing" in st.session_state:
             st.session_state.editing = st.session_state.pop("open_editing")
-        editing = st.toggle("Edit questions", key="editing")
+        # the demo's answers are canned to match its questions, so they aren't editable
+        editing = False if DEMO else st.toggle("Edit questions", key="editing")
         gen = st.session_state.get("edit_gen", 0)   # in the keys, so a rewrite resets the fields
 
         if editing:
@@ -438,6 +475,8 @@ elif st.session_state.step == 2:
             st.rerun()
         if col2.button("Run audit", type="primary", disabled=bool(problems),
                        use_container_width=True, key="btn_run"):
+            if DEMO:
+                start_job("demo")
             querygen.save_query_set(business, town, qs["niche"], qs["queries"])
             start_job("live")
 
@@ -445,17 +484,16 @@ elif st.session_state.step == 3:
     job = st.session_state.get("job") or {"kind": "live", "state": "interrupted"}
 
     with st.container(border=True):
-        if job["state"] == "pending" and job["kind"] == "sample":
+        if job["state"] == "pending" and (DEMO or job["kind"] != "live"):
             job["state"] = "running"
-            run = load_saved_run()
+            run = modes.load_demo_run()
             report = loading_page(
-                f"Replaying a saved audit of {run['business']}",
-                "This is how a live audit looks while it runs.",
+                f"Asking the AI about {run['niche']} businesses in {run['location']}",
+                f"In a live audit, each question is a real AI search. The questions never name "
+                f"{run['business']}.",
                 run["queries"],
-                note=f"Sample replay of the audit saved on {run.get('run_at', '').replace('T', ' at ')}, "
-                     f"sped up. No live searches are being made.",
             )
-            replay_sample(run, report)
+            replay_demo(run, report)
             st.session_state.step = 1
             del st.session_state["job"]
             st.switch_page("pages/results.py")
@@ -466,7 +504,7 @@ elif st.session_state.step == 3:
             business, town = ans["business"], ans["town"]
             report = loading_page(
                 f"Asking the AI about {qs['niche']} businesses in {town}",
-                f"Each question is a live AI search. {business} is never named in them.",
+                f"Each question is a real AI search. The questions never name {business}.",
                 qs["queries"],
             )
             ok, failed, fatal = run_audit(business, qs["niche"], town, qs["queries"], report)
@@ -494,7 +532,7 @@ elif st.session_state.step == 3:
 
         else:                                        # the page reloaded mid-run: never start it again
             question("Running audit", "This audit was interrupted")
-            st.info("The page reloaded while the audit was running, so its progress was lost here. "
+            st.info("The page reloaded while the audit was running, so we lost track of it. "
                     "It has not been started again. Go back to your questions to run it.")
             if st.button("Back to your questions", key="btn_back_to_review"):
                 st.session_state.step = 2 if "qs" in st.session_state else 1

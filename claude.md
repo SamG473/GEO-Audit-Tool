@@ -24,9 +24,10 @@ search, well under 1p). Sam approves every real call, cheap ones included.
   screen for the generated queries (read-only, with an edit toggle), 3 loading
   page (per-question status, ticking clock, extraction step) + `run_audit()` (the
   paid pipeline: concurrent web searches, then extraction). The loading page is
-  driven by `run_audit`'s `report(statuses, stage)` callback; "Watch a sample
-  audit" replays `latest_run.json` through the same page with no API calls. A job
-  is started once (`job["state"]`), so a page rerun never pays for an audit twice.
+  driven by `run_audit`'s `report(statuses, stage)` callback. A job is started
+  once (`job["state"]`), so a page rerun never pays for an audit twice.
+- `modes.py` — demo mode + the live-audit password (no Streamlit).
+- `demo_run.json` — the committed canned demo audit (invented businesses).
 - `querygen.py` — query-generation prompt, reply validation, business-name guard,
   saved query sets (no Streamlit).
 - `extraction.py` — business-extraction prompt, code-side counting, ranking
@@ -41,6 +42,15 @@ search, well under 1p). Sam approves every real call, cheap ones included.
 - `latest_run.json` — one saved paid run (iterate against this).
 - OpenAI Responses API, model `gpt-5.5`, `web_search` tool for audits; plain
   calls for the judge; `gpt-6-luna` for query generation and extraction.
+
+## Demo mode vs live audits
+Every visitor starts in demo mode: an invented business ("Northgate Barbers",
+Cardiff) goes through the normal flow on canned data from `demo_run.json`, with
+zero API calls and a "Demo: sample data, no live searches" label on every
+screen. Live audits need `AUDIT_PASSWORD` set in the environment (`.env` works)
+and entered on the first screen; with it unset, only the demo exists. One flag
+(`DEMO` in `app.py` and `pages/results.py`) gates every path that reaches the API,
+and the saved live run is only shown to an unlocked session.
 
 ## Queries
 Five fixed intent types (best, service, constraint, situation, recommendation),
@@ -81,7 +91,10 @@ whitespace + thin dividers, not heavy boxes. No red for "missing" — keep it ca
 
 **Honesty rule:** never put fabricated numbers on screen. Every stat/metric must
 come from real data or a citable source. (Avoid past mistakes: an invented
-"potential visibility %" and a made-up "70% of search is LLM".)
+"potential visibility %" and a made-up "70% of search is LLM".) The one
+exception is demo mode, which is invented by design and says so on every screen;
+its businesses are all made up, it cites no sources, and its counts are still
+computed by the app's own code from the canned answers (a test checks this).
 
 ## Known limitations (keep honest — these are for Chris)
 - `cheap_match` detects presence, not endorsement; the judge backstops

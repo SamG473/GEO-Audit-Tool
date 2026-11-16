@@ -1,0 +1,176 @@
+{
+  "demo": true,
+  "business": "Northgate Barbers",
+  "niche": "barber",
+  "location": "Cardiff",
+  "queries": [
+    {
+      "intent": "best",
+      "query": "What's the best barber in Cardiff?",
+      "answer": "There isn't one single winner, but a few names come up again and again:\n\n- **Fenwick & Blade** — the one most people point to for a sharp, modern cut. Consistently strong reviews.\n- **Northgate Barbers** — a long-standing traditional shop with a loyal regular crowd.\n- **The Copper Comb** — smaller and quieter, known for taking its time over each cut.\n- **Marlowe's Barbershop** — a good shout if you want a classic look.\n\nIf I had to pick one, I'd start with **Fenwick & Blade**, with **Northgate Barbers** as the traditional alternative.",
+      "citations": []
+    },
+    {
+      "intent": "best",
+      "query": "Which barbers in Cardiff have the highest ratings?",
+      "answer": "Going by review scores, these are the ones that tend to sit at the top:\n\n1. **Fenwick & Blade** — very high average rating across a large number of reviews.\n2. **The Copper Comb** — fewer reviews, but almost all of them five stars.\n3. **Northgate Barbers** — highly rated, especially for consistency.\n4. **Tallis Street Barbers** — well rated for value.\n\nRatings change, so it's worth checking the latest reviews before you book.",
+      "citations": []
+    },
+    {
+      "intent": "service",
+      "query": "Where can I get a skin fade in Cardiff?",
+      "answer": "For a skin fade specifically, look for a shop that does a lot of them:\n\n- **Harbour Fade Co** — fades are their main thing, and it shows in their photos.\n- **Fenwick & Blade** — reliable for skin fades and tapers.\n- **Northgate** — more traditional overall, but their fades get good feedback.\n\nTake a photo of the fade you want; it makes a big difference.",
+      "citations": []
+    },
+    {
+      "intent": "service",
+      "query": "Can you recommend a Cardiff barber for a beard trim?",
+      "answer": "A few places are particularly good with beards:\n\n- **The Copper Comb** — beard shaping is one of their specialities.\n- **Marlowe's Barbershop** — offers a hot towel finish with a beard trim.\n- **Fenwick & Blade** — a solid option if you want a haircut and beard done together.\n\nIf your beard is longer, ask for a shape-up rather than a simple trim.",
+      "citations": []
+    },
+    {
+      "intent": "constraint",
+      "query": "Any affordable barbers in Cardiff city centre?",
+      "answer": "Yes, there are a few good-value options in the centre:\n\n- **Tallis Street Barbers** — one of the cheaper city-centre shops, walk-ins welcome.\n- **Bryn & Sons Barbers** — a no-frills family shop with low prices.\n- **Northgate Barbers** — mid-priced rather than cheap, but offers student and weekday discounts.\n\nPrices change, so check the current price list before you go.",
+      "citations": []
+    },
+    {
+      "intent": "constraint",
+      "query": "Are there barbers in Cardiff Bay open late on weekdays?",
+      "answer": "Late opening is less common, but two are worth a look:\n\n- **Harbour Fade Co** — usually open into the evening on weekdays.\n- **Oakfield Grooming Room** — takes later appointments on some weekdays if you book ahead.\n\nOpening hours vary, so confirm with the shop before travelling.",
+      "citations": []
+    },
+    {
+      "intent": "situation",
+      "query": "I need a haircut before a job interview in Cardiff, where should I go?",
+      "answer": "For an interview you want something neat and dependable, not experimental:\n\n- **Fenwick & Blade** — good at a tidy, professional finish.\n- **Northgate Barbers** — a safe choice for a classic short back and sides.\n- **Marlowe's** — also good if you want a traditional look.\n\nBook a day or two before the interview rather than on the morning itself.",
+      "citations": []
+    },
+    {
+      "intent": "situation",
+      "query": "Where can I take my son for his first haircut in Cardiff?",
+      "answer": "For a first haircut, patience matters more than style:\n\n- **Bryn & Sons Barbers** — a family shop that's used to young children.\n- **Oakfield Grooming Room** — quiet and relaxed, with appointments so there's no waiting.\n- **Tallis Street Barbers** — friendly with kids and inexpensive.\n\nGo at a quiet time of day and bring something to keep him occupied.",
+      "citations": []
+    },
+    {
+      "intent": "recommendation",
+      "query": "Who would you recommend for a barber in Cardiff?",
+      "answer": "My short list would be:\n\n- **Fenwick & Blade** — the best all-rounder.\n- **The Copper Comb** — if you'd like a quieter, more careful experience.\n- **Northgate Barbers** — if you prefer a traditional barbershop.\n\nAny of the three is a sound choice; it mostly comes down to the style you want.",
+      "citations": []
+    },
+    {
+      "intent": "recommendation",
+      "query": "I'm looking for a barber in Cardiff, who would you recommend?",
+      "answer": "I'd suggest starting with one of these:\n\n- **Fenwick & Blade** — reliable and well reviewed.\n- **Marlowe's Barbershop** — good for classic cuts.\n- **The Copper Comb** — good with beards as well as hair.\n- **Harbour Fade Co** — best if you're after a fade.\n\nTell me the style you want and I can narrow it down.",
+      "citations": []
+    }
+  ],
+  "businesses": [
+    {
+      "name": "Fenwick & Blade",
+      "variants": [
+        "Fenwick & Blade"
+      ],
+      "answers": [
+        0,
+        1,
+        2,
+        3,
+        6,
+        8,
+        9
+      ],
+      "is_you": false
+    },
+    {
+      "name": "Northgate Barbers",
+      "variants": [
+        "Northgate Barbers",
+        "Northgate"
+      ],
+      "answers": [
+        0,
+        1,
+        2,
+        4,
+        6,
+        8
+      ],
+      "is_you": true
+    },
+    {
+      "name": "The Copper Comb",
+      "variants": [
+        "The Copper Comb"
+      ],
+      "answers": [
+        0,
+        1,
+        3,
+        8,
+        9
+      ],
+      "is_you": false
+    },
+    {
+      "name": "Marlowe's Barbershop",
+      "variants": [
+        "Marlowe's Barbershop",
+        "Marlowe's"
+      ],
+      "answers": [
+        0,
+        3,
+        6,
+        9
+      ],
+      "is_you": false
+    },
+    {
+      "name": "Tallis Street Barbers",
+      "variants": [
+        "Tallis Street Barbers"
+      ],
+      "answers": [
+        1,
+        4,
+        7
+      ],
+      "is_you": false
+    },
+    {
+      "name": "Harbour Fade Co",
+      "variants": [
+        "Harbour Fade Co"
+      ],
+      "answers": [
+        2,
+        5,
+        9
+      ],
+      "is_you": false
+    },
+    {
+      "name": "Bryn & Sons Barbers",
+      "variants": [
+        "Bryn & Sons Barbers"
+      ],
+      "answers": [
+        4,
+        7
+      ],
+      "is_you": false
+    },
+    {
+      "name": "Oakfield Grooming Room",
+      "variants": [
+        "Oakfield Grooming Room"
+      ],
+      "answers": [
+        5,
+        7
+      ],
+      "is_you": false
+    }
+  ]
+}

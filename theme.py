@@ -133,6 +133,13 @@ _STYLE = """
 .geo-run-row.is-queued .geo-pulse { animation: none; background: transparent; border: 2px solid #B8C2CC; }
 .geo-run-divider { height: 10px; }
 
+/* ---- demo label (every screen in demo mode) ---- */
+.geo-demo {
+  font-size: 13px; font-weight: 600; color: #2E6F95; background: #F4F6F8;
+  border: 1px solid #ECEFF2; border-radius: 8px; padding: 8px 12px; margin: 0 0 14px 0;
+  text-align: center; letter-spacing: 0.01em;
+}
+
 .geo-section-title { font-size: 15px; font-weight: 600; color: #1A1A1A; margin: 30px 0 2px 0; }
 .geo-section-sub { font-size: 13px; color: #5A6672; margin-bottom: 10px; }
 .geo-nudge {
@@ -260,6 +267,11 @@ _STYLE = """
 def inject_theme():
     """Emit the shared `<style>` block. Call once per page, after set_page_config."""
     st.markdown(_STYLE, unsafe_allow_html=True)
+
+
+def demo_banner(label):
+    """The "this is sample data" label shown at the top of every demo-mode screen."""
+    st.markdown(f'<div class="geo-demo">{escape(label)}</div>', unsafe_allow_html=True)
 
 
 def app_header(title, tagline):

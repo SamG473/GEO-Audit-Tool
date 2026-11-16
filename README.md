@@ -1,114 +1,129 @@
 # GEO Audit Tool
 
-Measure how often an AI search assistant recommends a given business, its
-**share of voice** in generative search results.
+This tool measures how often an AI search assistant recommends a business.
 
-As people increasingly ask LLM-backed assistants questions like *"best barber in
-Cardiff"* instead of scrolling a results page, **being mentioned in the answer**
-becomes the new ranking. This tool quantifies that: it puts a set of realistic
-customer questions to a web-search-enabled model, then measures how often the
-target business shows up across the answers.
+More people now ask an AI assistant "who's the best barber in Cardiff?" instead
+of scrolling through search results. If the answer doesn't mention your
+business, you're invisible to them. The tool asks an AI a set of realistic
+customer questions, then counts how many of the answers mention the business.
+That count is its **share of voice**.
 
-The running example throughout is **Lazarou Barbers** — a barber in Cardiff.
+The example used throughout is **Lazarou Barbers**, a barber in Cardiff.
 
 ---
 
 ## What it does
 
-1. **Two inputs** ([app.py](app.py)): the business name and its town. Nothing else.
-2. **Query generation** ([querygen.py](querygen.py)): one cheap model call (no web
-   search) works out the niche from the name and town, then writes **10
-   customer-sounding questions**: two for each of five fixed intent types.
+1. **Two inputs** ([app.py](app.py)). You give the business name and its town.
+2. **Query generation** ([querygen.py](querygen.py)). One cheap model call, with
+   no web search, works out what kind of business it is. It then writes 10
+   questions a customer might ask, two for each of five fixed types:
 
-   | Intent type | What the customer wants |
+   | Type | What the customer wants |
    |---|---|
-   | best | the best or top-rated business of this kind in town |
+   | best | the best business of this kind in town |
    | service | one specific service |
    | constraint | to fit a price, opening hours or location |
    | situation | help with a particular occasion or need |
    | recommendation | a straight "who would you recommend?" |
 
-   The questions **never include the business's name**: the test is whether the
-   AI recommends it unprompted. That rule is enforced in code, not just in the
-   prompt.
-3. **Review screen**: the niche and the 10 questions are shown before anything is
-   spent. They can be edited, and if the model wasn't sure of the niche the screen
-   opens in edit mode with the niche flagged.
-4. **Saved query sets**: the approved set is stored against the business + town
-   (SQLite). Running the same business again reuses exactly the same questions,
-   so two runs are comparable.
-5. **Audit pipeline** (`run_audit`): the 10 questions go to the model with the
-   `web_search` tool, concurrently. A separate loading page lists the 10
-   questions and ticks each one off as its answer arrives, with a running clock.
-   "Watch a sample audit" replays the saved run through the same page for free.
-   Every query → answer (plus cited sources) is saved to
-   [latest_run.json](latest_run.json).
-6. **Competitors from the answers** ([extraction.py](extraction.py)): one more cheap
-   call lists every business the 10 answers mention. The model only *lists* them;
-   the counts are computed in code from what literally appears in each answer, so
-   a business the model invents can't reach the screen.
-7. **Dashboard** ([pages/results.py](pages/results.py)) reads the saved run and
-   shows three tabs:
-   - **Your visibility** — share-of-voice gauge + which queries you appear in vs. miss.
-   - **You vs competitors** — a ranking of every business the AI mentioned, where
-     yours sits in it, and which sources the AI cited.
-   - **What's next** — a recap and a lead-capture form (stored in SQLite).
+   The questions never include the business's name, because the test is whether
+   the AI recommends it without being asked. The code checks this, so it doesn't
+   depend on the model following the prompt.
+3. **Review screen.** You see the niche and the 10 questions before anything is
+   spent, and you can edit them. If the model wasn't sure what kind of business
+   it is, the screen opens in edit mode with the niche flagged.
+4. **Saved query sets.** The approved questions are stored against the business
+   and town in SQLite. Running the same business again reuses the same
+   questions, so two runs can be compared.
+5. **Audit** (`run_audit`). The 10 questions go to the model with the
+   `web_search` tool, all at the same time. A loading page lists the questions
+   and ticks each one off as its answer arrives. Each question, its answer and
+   the sources it cited are saved to [latest_run.json](latest_run.json).
+6. **Competitors from the answers** ([extraction.py](extraction.py)). One more
+   cheap call lists every business the answers mention. The model only lists
+   the names. The code counts how many answers each name appears in, so a
+   business the model makes up can't reach the screen.
+7. **Results** ([pages/results.py](pages/results.py)) has three tabs:
+   - **Your visibility**: your share of voice, and which questions you appear in.
+   - **You vs competitors**: every business the AI mentioned, ranked, with yours
+     marked. It also lists the sources the AI cited.
+   - **What's next**: a recap and a form to leave your details.
+
+## Demo mode and live audits
+
+The app opens in **demo mode**. It walks a made-up business ("Northgate
+Barbers" in Cardiff) through the same screens using saved sample data from
+[demo_run.json](demo_run.json). It makes no API calls. Every screen is labelled
+"Demo: sample data, no live searches". Every business in the demo is invented,
+and the demo cites no sources.
+
+**Live audits** cost real money, so they need a password. The password is read
+from the `AUDIT_PASSWORD` environment variable. If the variable isn't set, only
+the demo works and there is no way to start a live audit. A saved live run is
+only shown to someone who has entered the password.
 
 ---
 
-## Detection 
+## Detection
 
-The core problem is deceptively hard: *did this specific business appear in this
-answer?* Naive substring matching breaks on abbreviations, shared common words
-(a rival "City Barbers" vs. the category "barber"), and dismissive mentions.
+The hard part is deciding whether a specific business appears in an answer.
+Simple text matching goes wrong in three ways. Names get shortened. Different
+businesses share common words ("City Barbers" and the word "barber"). And an
+answer can mention a business only to dismiss it.
 
-The solution ([detection.py](detection.py)) is a **hybrid router** whose guiding
-principle is **"change the cost, not the accuracy"**:
+The detection code ([detection.py](detection.py)) picks one of two methods for
+each business name. The rule is that the choice may change the cost but never
+the accuracy.
 
-1. `distinctive_tokens()` — lower-cases the name, strips the category, location,
-   and legal suffixes (Ltd, LLC, …), then keeps only **rare tokens** using
-   [`wordfreq`](https://pypi.org/project/wordfreq/) zipf frequency below `2.5`.
-   For *"Lazarou Barbers"* this isolates `lazarou` — a distinctive anchor.
-2. `has_anchor()` — does the name contain such a distinctive token?
-   - **Yes** → `cheap_match()`: a free word-boundary regex check. Safe, because a
-     rare, coined token can't collide with everyday words.
-   - **No** (generic/ambiguous names like *"City Barbers"*) → fall back to an
-     **LLM judge** (`judge()`) that reasons about whether the business is really
-     present, tolerating abbreviations and rejecting shared-word false positives.
+1. `distinctive_tokens()` lower-cases the name and removes the category, the
+   location and legal suffixes such as Ltd. It keeps only rare words, using
+   [`wordfreq`](https://pypi.org/project/wordfreq/) with a zipf frequency below
+   `2.5`. For "Lazarou Barbers" that leaves `lazarou`.
+2. `has_anchor()` asks whether the name has a rare word like that.
+   - **If it does**, `cheap_match()` runs a free word-boundary regex check. This
+     is safe because a rare, coined word won't collide with everyday words.
+   - **If it doesn't** (a generic name like "City Barbers"), an LLM judge
+     (`judge()`) decides whether the business is really present. It accepts
+     shortened names and rejects businesses that only share a word.
 
-So ambiguous names always get the accurate (paid) path; only clearly-distinctive
-names take the free shortcut. Judge verdicts are cached on the dashboard
-(`@st.cache_data`) so repeated views don't re-pay.
+Generic names always get the accurate, paid check. Only clearly distinctive
+names take the free one. Judge verdicts are cached on the results page
+(`@st.cache_data`), so viewing it again doesn't cost anything.
 
 <img src="docs/your-visibility.png" width="620" alt="Share-of-voice gauge with matched and missed queries">
 
-*The router's verdicts rendered: 8 of 10 answers counted as a mention, with the
-matched queries and the two misses listed side by side.*
+*The results for one run: 8 of 10 answers mention the business. The matched
+questions and the two misses are listed side by side.*
 
 ---
 
 ## Tech stack
 
-- **Python** + **[Streamlit](https://streamlit.io/)** (multipage: wizard + dashboard)
-- **OpenAI Responses API** — model `gpt-5.5`, `web_search` tool for audits; plain
-  calls for the judge; `gpt-6-luna` for query generation and business extraction
-- **`wordfreq`** for the distinctiveness heuristic
-- **SQLite** ([init_db.py](init_db.py)) for captured leads and saved query sets
+- **Python** and **[Streamlit](https://streamlit.io/)** (two pages: the wizard
+  and the results)
+- **OpenAI Responses API**: `gpt-5.5` with the `web_search` tool for audits and
+  plain calls for the judge, and `gpt-6-luna` for query generation and
+  business extraction
+- **`wordfreq`** to tell rare words from common ones
+- **SQLite** ([init_db.py](init_db.py)) for form submissions and saved query sets
 
 ---
 
 ## Setup
 
 ```bash
-# 1. create + activate a virtual environment
+# 1. create and activate a virtual environment
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 
 # 2. install dependencies
 pip install -r requirements.txt
 
-# 3. add your OpenAI key
+# 3. add your OpenAI key, and a password for live audits
+#    (without AUDIT_PASSWORD the app runs in demo mode only)
 echo "OPENAI_API_KEY=sk-..." > .env
+echo "AUDIT_PASSWORD=choose-a-password" >> .env
 
 # 4. create the SQLite database
 python init_db.py
@@ -116,7 +131,7 @@ python init_db.py
 # 5. run the app
 streamlit run app.py
 
-# run the tests (every API call is faked — free)
+# run the tests (every API call is faked, so they cost nothing)
 python -m unittest discover -s tests
 ```
 
@@ -126,31 +141,35 @@ python -m unittest discover -s tests
 
 | File | Purpose |
 |------|---------|
-| [app.py](app.py) | Input wizard, review screen + the paid `run_audit` pipeline |
-| [querygen.py](querygen.py) | Query-generation prompt, validation, name guard, saved query sets |
-| [extraction.py](extraction.py) | Business-extraction prompt, code-side counting, ranking |
-| [pages/results.py](pages/results.py) | Three-tab results dashboard |
-| [detection.py](detection.py) | Hybrid detection router (tokens → cheap match / LLM judge) |
-| [theme.py](theme.py) | Shared `geo-` visual design system for both pages |
-| [init_db.py](init_db.py) | Creates the SQLite schema (`leads`, `query_sets`) |
+| [app.py](app.py) | The wizard, review screen, loading page and the paid `run_audit` |
+| [querygen.py](querygen.py) | Query-generation prompt, checks on the reply, saved query sets |
+| [extraction.py](extraction.py) | Business-extraction prompt, counting and ranking |
+| [pages/results.py](pages/results.py) | The three-tab results page |
+| [detection.py](detection.py) | Decides whether a business appears in an answer |
+| [theme.py](theme.py) | Shared styling for both pages |
+| [modes.py](modes.py) | Demo data and the live-audit password check |
+| [demo_run.json](demo_run.json) | The sample data used by demo mode |
+| [init_db.py](init_db.py) | Creates the SQLite tables (`leads`, `query_sets`) |
 | [tests/](tests/) | Unit and page tests against a fake API |
-| [latest_run.json](latest_run.json) | One saved audit — the dashboard's data source |
-| [evaluate.py](evaluate.py) | Diagnostic harness over a saved run |
+| [latest_run.json](latest_run.json) | The most recent saved live audit |
+| [evaluate.py](evaluate.py) | A diagnostic script over a saved run |
 
 ---
 
-## Limitations & future work
+## Limitations
 
-- **Presence, not endorsement.** `cheap_match` confirms a business is mentioned,
-  not that it's *recommended*; a dismissive mention still counts as a hit. The
-  LLM judge backstops the ambiguous cases.
-- **Audit speed.** Some audits can take up to 90 seconds to load the results because of the Api calls. 
-- **Single saved run.** The dashboard shows one audit at a time, not tracking
-  over time; a new audit overwrites the previous saved run.
-- **Niche is inferred from the name.** An unclear name can be guessed wrong; the
-  review screen flags it and lets the owner correct it.
-- **Queries differ between businesses.** The intent types are fixed but the wording
-  is model-written, so compare two businesses by intent type, not query by query.
-- **Extraction recall is unverified.** A business the model fails to list is
-  missing from the ranking. (An invented one can't appear: it matches no answer.)
-- **The ranking counts mentions, not endorsements.**
+- **A mention is not a recommendation.** `cheap_match` confirms a business is
+  named, not that it's recommended. An answer that dismisses a business still
+  counts. The same is true of the competitor ranking.
+- **Audit speed.** A live audit waits on 10 real web searches. They run at the
+  same time, so it takes about as long as the slowest one.
+- **One saved run.** The results page shows one audit. A new audit replaces the
+  previous one, and there is no tracking over time.
+- **The niche is worked out from the name.** An unclear name can be guessed
+  wrong. The review screen flags this and lets the owner correct it.
+- **Questions differ between businesses.** The five types are fixed but the
+  wording is written by a model. Compare two businesses by question type, not
+  question by question.
+- **The competitor list may miss a business.** If the model fails to list a
+  business, it won't be in the ranking. A made-up one can't appear, because it
+  matches no answer.

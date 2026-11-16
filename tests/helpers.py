@@ -16,6 +16,8 @@ import types
 import unittest
 
 os.environ["OPENAI_API_KEY"] = "sk-DUMMY-tests-never-call-openai"
+PASSWORD = "test-password"
+os.environ["AUDIT_PASSWORD"] = PASSWORD          # live audits enabled for tests; "" turns them off
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
@@ -125,6 +127,13 @@ class FakeAPI:
         return self
 
 
+def unlock_live(at):
+    """Enter the live-audit password on the first screen of an AppTest."""
+    at.text_input(key="in_password").set_value(PASSWORD)
+    at.button(key="btn_unlock").click().run()
+    return at
+
+
 class TempDirTest(unittest.TestCase):
     """Runs each test in an empty temp directory, so latest_run.json and geo.db
     (both opened by relative path) never touch the repo's copies."""
@@ -133,11 +142,13 @@ class TempDirTest(unittest.TestCase):
         self._cwd = os.getcwd()
         self._tmp = tempfile.TemporaryDirectory()
         os.chdir(self._tmp.name)
+        os.environ["AUDIT_PASSWORD"] = PASSWORD
         Responses.create = _unmocked
 
     def tearDown(self):
         os.chdir(self._cwd)
         self._tmp.cleanup()
+        os.environ["AUDIT_PASSWORD"] = PASSWORD
         Responses.create = _unmocked
 
     def saved_run(self):

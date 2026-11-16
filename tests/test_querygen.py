@@ -109,6 +109,13 @@ class NameGuardTest(unittest.TestCase):
         self.assertEqual(querygen.check_queries("Lazarou Barbers", "barber", "Cardiff", QUERIES), [])
         self.assertIn("niche is blank", querygen.check_queries("Lazarou Barbers", " ", "Cardiff", QUERIES)[0])
 
+    def test_messages_use_no_dashes(self):
+        edited = [dict(q) for q in QUERIES]
+        edited[1]["query"] = ""
+        edited[4]["query"] = "Is Lazarou Barbers cheap?"
+        for problem in querygen.check_queries("Lazarou Barbers", " ", "Cardiff", edited):
+            self.assertNotRegex(problem, "[—–!]")
+
     def test_generated_fixture_never_names_the_business(self):
         for q in QUERIES:
             self.assertFalse(self.check("Lazarou Barbers", q["query"]), q["query"])

@@ -171,13 +171,13 @@ def check_queries(business, niche, town, queries):
     (empty list = good to go). Runs on generated and user-edited queries alike."""
     problems = []
     if not niche.strip():
-        problems.append("The niche is blank — say what kind of business this is.")
+        problems.append("The niche is blank. Say what kind of business this is.")
     for n, q in enumerate(queries, start=1):
         if not q["query"].strip():
             problems.append(f"Query {n} is blank.")
         elif mentions_business(business, q["query"], niche, town):
-            problems.append(f"Query {n} mentions your business by name — take the name out, "
-                            f"so we test whether the AI recommends you unprompted.")
+            problems.append(f"Query {n} mentions your business by name. Take the name out, "
+                            f"so the AI isn't prompted to recommend you.")
     return problems
 
 
