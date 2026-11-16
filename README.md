@@ -8,13 +8,20 @@ business, you're invisible to them. The tool asks an AI a set of realistic
 customer questions, then counts how many of the answers mention the business.
 That count is its **share of voice**.
 
-The example used throughout is **Lazarou Barbers**, a barber in Cardiff.
+The screenshots below come from the built-in demo, which uses a made-up
+business called **Northgate Barbers**. The detection examples use **Lazarou
+Barbers**, a real barber in Cardiff.
 
 ---
 
 ## What it does
 
 1. **Two inputs** ([app.py](app.py)). You give the business name and its town.
+
+   <img src="docs/first-screen.png" width="620" alt="First screen with the business name and town fields">
+
+   *The first screen in demo mode. The two fields are filled in and locked.*
+
 2. **Query generation** ([querygen.py](querygen.py)). One cheap model call, with
    no web search, works out what kind of business it is. It then writes 10
    questions a customer might ask, two for each of five fixed types:
@@ -31,24 +38,46 @@ The example used throughout is **Lazarou Barbers**, a barber in Cardiff.
    the AI recommends it without being asked. The code checks this, so it doesn't
    depend on the model following the prompt.
 3. **Review screen.** You see the niche and the 10 questions before anything is
-   spent, and you can edit them. If the model wasn't sure what kind of business
-   it is, the screen opens in edit mode with the niche flagged.
+   spent. An "Edit questions" switch lets you change them. If the model wasn't
+   sure what kind of business it is, the screen opens in edit mode with the
+   niche flagged.
 4. **Saved query sets.** The approved questions are stored against the business
    and town in SQLite. Running the same business again reuses the same
    questions, so two runs can be compared.
 5. **Audit** (`run_audit`). The 10 questions go to the model with the
-   `web_search` tool, all at the same time. A loading page lists the questions
-   and ticks each one off as its answer arrives. Each question, its answer and
-   the sources it cited are saved to [latest_run.json](latest_run.json).
+   `web_search` tool, all at the same time. A separate loading page lists the
+   questions and ticks each one off as its answer arrives, with a clock that
+   counts the seconds. Each question, its answer and the sources it cited are
+   saved to [latest_run.json](latest_run.json). If the page reloads part-way
+   through, the audit is not started a second time.
+
+   <img src="docs/loading.png" width="620" alt="Loading page with six of ten questions ticked off">
+
+   *The loading page part-way through: 6 of 10 answered, with finding the
+   businesses still to come.*
+
 6. **Competitors from the answers** ([extraction.py](extraction.py)). One more
    cheap call lists every business the answers mention. The model only lists
    the names. The code counts how many answers each name appears in, so a
    business the model makes up can't reach the screen.
 7. **Results** ([pages/results.py](pages/results.py)) has three tabs:
    - **Your visibility**: your share of voice, and which questions you appear in.
+
+     <img src="docs/your-visibility.png" width="620" alt="Share of voice gauge with matched and missed questions">
+
+     *Northgate Barbers appears in 6 of the 10 answers. The questions it
+     appears in and the 4 it misses are listed side by side.*
+
    - **You vs competitors**: every business the AI mentioned, ranked, with yours
      marked. It also lists the sources the AI cited.
-   - **What's next**: a recap and a form to leave your details.
+
+     <img src="docs/competitors.png" width="620" alt="Ranking of the businesses the AI mentioned">
+
+     *Every business the answers mention, ranked by how many answers name it.
+     The demo has no source list, so that section is empty here.*
+
+   - **What's next**: a recap, a form to leave your details, and a "Start
+     again" button that takes you back to the first screen.
 
 ## Demo mode and live audits
 
@@ -56,12 +85,14 @@ The app opens in **demo mode**. It walks a made-up business ("Northgate
 Barbers" in Cardiff) through the same screens using saved sample data from
 [demo_run.json](demo_run.json). It makes no API calls. Every screen is labelled
 "Demo: sample data, no live searches". Every business in the demo is invented,
-and the demo cites no sources.
+and the demo cites no sources. The questions can't be edited and the details
+form is a locked example, so nothing can be sent.
 
 **Live audits** cost real money, so they need a password. The password is read
 from the `AUDIT_PASSWORD` environment variable. If the variable isn't set, only
-the demo works and there is no way to start a live audit. A saved live run is
-only shown to someone who has entered the password.
+the demo works and there is no way to start a live audit. With it set, the
+first screen has a "Run a live audit" panel that asks for the password. A saved
+live run is only shown to someone who has entered it.
 
 ---
 
@@ -90,11 +121,6 @@ the accuracy.
 Generic names always get the accurate, paid check. Only clearly distinctive
 names take the free one. Judge verdicts are cached on the results page
 (`@st.cache_data`), so viewing it again doesn't cost anything.
-
-<img src="docs/your-visibility.png" width="620" alt="Share-of-voice gauge with matched and missed queries">
-
-*The results for one run: 8 of 10 answers mention the business. The matched
-questions and the two misses are listed side by side.*
 
 ---
 
@@ -151,6 +177,7 @@ python -m unittest discover -s tests
 | [demo_run.json](demo_run.json) | The sample data used by demo mode |
 | [init_db.py](init_db.py) | Creates the SQLite tables (`leads`, `query_sets`) |
 | [tests/](tests/) | Unit and page tests against a fake API |
+| [docs/](docs/) | Screenshots used in this README |
 | [latest_run.json](latest_run.json) | The most recent saved live audit |
 | [evaluate.py](evaluate.py) | A diagnostic script over a saved run |
 
@@ -170,6 +197,8 @@ python -m unittest discover -s tests
 - **Questions differ between businesses.** The five types are fixed but the
   wording is written by a model. Compare two businesses by question type, not
   question by question.
+- **The password check is basic.** There is no limit on wrong guesses, so use a
+  long password if the app is public.
 - **The competitor list may miss a business.** If the model fails to list a
   business, it won't be in the ranking. A made-up one can't appear, because it
   matches no answer.
