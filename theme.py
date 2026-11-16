@@ -95,6 +95,44 @@ _STYLE = """
 .geo-query {
   font-size: 14px; color: #1A1A1A; padding: 7px 0; border-bottom: 1px solid #ECEFF2;
 }
+/* ---- loading page + "working" panel ---- */
+@keyframes geo-pulse { 0%, 100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
+.geo-pulse {
+  flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; background: #2E6F95;
+  animation: geo-pulse 1.2s ease-in-out infinite;
+}
+.geo-tick, .geo-dash {
+  flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; margin: 0 -4px;
+}
+.geo-tick { background: #2E6F95; color: #fff; }
+.geo-dash { background: #E1E6EB; color: #5A6672; }
+.geo-working {
+  display: flex; align-items: center; gap: 14px; background: #F4F6F8; border-radius: 10px;
+  padding: 14px 16px; margin: 10px 0 4px 0;
+}
+.geo-working-body { flex: 1; min-width: 0; }
+.geo-working-title { font-size: 15px; font-weight: 600; color: #1A1A1A; }
+.geo-working-sub { font-size: 13px; color: #5A6672; margin-top: 2px; }
+.geo-run-head { display: flex; justify-content: space-between; align-items: baseline; margin: 14px 0 8px 0; }
+.geo-run-count { font-size: 15px; font-weight: 600; color: #1A1A1A; }
+.geo-run-clock { font-size: 15px; font-weight: 600; color: #2E6F95; font-variant-numeric: tabular-nums; }
+.geo-rankbar-fill.is-live { background: #2E6F95; }
+.geo-run-row {
+  display: flex; align-items: center; gap: 14px; padding: 10px 2px; border-bottom: 1px solid #ECEFF2;
+  font-size: 14px;
+}
+.geo-run-row:last-child { border-bottom: none; }
+.geo-run-text { flex: 1; min-width: 0; }
+.geo-run-state { font-size: 12px; white-space: nowrap; }
+.geo-run-row.is-waiting { color: #5A6672; }
+.geo-run-row.is-waiting .geo-run-state { color: #8A95A1; }
+.geo-run-row.is-done { color: #1A1A1A; }
+.geo-run-row.is-done .geo-run-state { color: #2E6F95; font-weight: 600; }
+.geo-run-row.is-failed, .geo-run-row.is-failed .geo-run-state { color: #8A95A1; }
+.geo-run-row.is-queued .geo-pulse { animation: none; background: transparent; border: 2px solid #B8C2CC; }
+.geo-run-divider { height: 10px; }
+
 .geo-section-title { font-size: 15px; font-weight: 600; color: #1A1A1A; margin: 30px 0 2px 0; }
 .geo-section-sub { font-size: 13px; color: #5A6672; margin-bottom: 10px; }
 .geo-nudge {

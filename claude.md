@@ -20,9 +20,13 @@ search, well under 1p). Sam approves every real call, cheap ones included.
 
 ## Stack / layout
 - Python, Streamlit multipage (`pages/`). macOS, zsh, venv at `venv/` (`venv/bin/streamlit`).
-- `app.py` — two-screen wizard (`st.session_state`): business name + town, then
-  a review screen for the generated queries (read-only, with an edit toggle) +
-  `run_audit()` (the paid pipeline: concurrent web searches, then extraction).
+- `app.py` — wizard (`st.session_state.step`): 1 business name + town, 2 review
+  screen for the generated queries (read-only, with an edit toggle), 3 loading
+  page (per-question status, ticking clock, extraction step) + `run_audit()` (the
+  paid pipeline: concurrent web searches, then extraction). The loading page is
+  driven by `run_audit`'s `report(statuses, stage)` callback; "Watch a sample
+  audit" replays `latest_run.json` through the same page with no API calls. A job
+  is started once (`job["state"]`), so a page rerun never pays for an audit twice.
 - `querygen.py` — query-generation prompt, reply validation, business-name guard,
   saved query sets (no Streamlit).
 - `extraction.py` — business-extraction prompt, code-side counting, ranking

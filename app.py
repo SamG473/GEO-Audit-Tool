@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import json
 import random
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime
 from html import escape
 
@@ -20,6 +20,7 @@ load_dotenv()
 
 MAX_WORKERS = 10        # concurrent web-search calls; lower this if you hit rate limits
 MAX_ATTEMPTS = 6        # per call: 1 try + 5 retries, backoff ~1+2+4+8+16s (plus jitter)
+TICK = 0.25             # seconds between progress refreshes while waiting on the API
 
 # SDK retries are off because the SDK retries every 429 — including "out of
 # credits", which can never succeed. create_with_retry() does the retrying instead
@@ -108,7 +109,7 @@ def extract_citations(response):
     return citations
 
 
-def run_audit(business, niche, town, queries):
+def run_audit(business, niche, town, queries, report=None):
     """The real, paid audit: one web search per query (10, ~£2), then one cheap
     call to list the businesses the answers mention. Writes the run to
     latest_run.json (overwriting any previous run) for the Results page to read.
@@ -117,53 +118,68 @@ def run_audit(business, niche, town, queries):
     concurrently (MAX_WORKERS threads) but are saved in the given order, so runs
     stay comparable.
 
+    `report(statuses, stage)` is how the loading page follows along. `statuses`
+    has one entry per query ("waiting", "done" or "failed"); `stage` is
+    "searching", "extracting" or "finished". It is called on every change and at
+    least every TICK seconds, always from the calling thread, so it can safely
+    draw to the page and keep a clock ticking.
+
     Returns (saved, failed_count, fatal). A single failed query is skipped so it
     doesn't bin the whole run; `saved` is False only if every query failed, in
     which case the previous saved run is left untouched. `fatal` is a user-facing
     message if any call hit a quota/auth error (not retried), else None. If the
     extraction step fails the run is still saved, without the business list."""
+    report = report or (lambda statuses, stage: None)
     total = len(queries)
     results = [None] * total                        # slot per query keeps the original order
+    statuses = ["waiting"] * total
     fatal = None
-    done = 0
-    bar = st.progress(0.0, text=f"0 of {total} answered")
-    # Only the main thread touches Streamlit; workers just make the API call.
+    businesses = None                               # None = extraction didn't complete
+    report(statuses, "searching")
+    # Only this thread touches Streamlit; workers just make the API calls.
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {pool.submit(search_one, q["query"]): i for i, q in enumerate(queries)}
-        for future in as_completed(futures):
-            i = futures[future]
-            try:
-                response = future.result()
-                results[i] = {
-                    "intent": queries[i]["intent"],
-                    "query": queries[i]["query"],
-                    "answer": response.output_text,
-                    "citations": extract_citations(response),
-                }
-            except FatalAPIError as e:
-                fatal = str(e)
-                print(f"[audit] query failed (not retried): {queries[i]['query']!r} — {e.__cause__}")
-            except Exception as e:                  # one bad call shouldn't bin the whole run
-                print(f"[audit] query failed: {queries[i]['query']!r} — {e}")
-            done += 1
-            bar.progress(done / total, text=f"{done} of {total} answered")
+        pending = set(futures)
+        while pending:
+            finished, pending = wait(pending, timeout=TICK, return_when=FIRST_COMPLETED)
+            for future in finished:
+                i = futures[future]
+                try:
+                    response = future.result()
+                    results[i] = {
+                        "intent": queries[i]["intent"],
+                        "query": queries[i]["query"],
+                        "answer": response.output_text,
+                        "citations": extract_citations(response),
+                    }
+                    statuses[i] = "done"
+                except FatalAPIError as e:
+                    fatal = str(e)
+                    statuses[i] = "failed"
+                    print(f"[audit] query failed (not retried): {queries[i]['query']!r} — {e.__cause__}")
+                except Exception as e:              # one bad call shouldn't bin the whole run
+                    statuses[i] = "failed"
+                    print(f"[audit] query failed: {queries[i]['query']!r} — {e}")
+            report(statuses, "searching")
 
-    run_queries = [r for r in results if r is not None]
-    failed = total - len(run_queries)
-    if not run_queries:                             # everything failed — leave the saved run untouched
-        bar.empty()
-        return False, failed, fatal
+        run_queries = [r for r in results if r is not None]
+        failed = total - len(run_queries)
+        if not run_queries:                         # everything failed — leave the saved run untouched
+            return False, failed, fatal
 
-    bar.progress(1.0, text="Finding the businesses mentioned…")
-    businesses = None                               # None = extraction didn't complete
-    try:
-        businesses = extract_businesses(business, niche, town, [r["answer"] for r in run_queries])
-    except FatalAPIError as e:
-        fatal = str(e)
-        print(f"[audit] business extraction failed (not retried) — {e.__cause__}")
-    except Exception as e:                          # the answers are paid for — keep them regardless
-        print(f"[audit] business extraction failed — {e}")
-    bar.empty()
+        # extraction runs on a worker too, so the page keeps ticking while it waits
+        job = pool.submit(extract_businesses, business, niche, town, [r["answer"] for r in run_queries])
+        while not job.done():
+            report(statuses, "extracting")
+            wait([job], timeout=TICK)
+        try:
+            businesses = job.result()
+        except FatalAPIError as e:
+            fatal = str(e)
+            print(f"[audit] business extraction failed (not retried) — {e.__cause__}")
+        except Exception as e:                      # the answers are paid for — keep them regardless
+            print(f"[audit] business extraction failed — {e}")
+    report(statuses, "finished")
 
     run_data = {
         "business": business,
@@ -181,7 +197,8 @@ def run_audit(business, niche, town, queries):
 # ---------------- input wizard ----------------
 app_header("GEO Audit Tool", "See how often AI search results recommend a business.")
 
-STEP_LABELS = ["Your business", "Review questions", "Results"]
+STEP_LABELS = ["Your business", "Review questions", "Running audit"]
+SAVED_RUN = "latest_run.json"
 
 if "step" not in st.session_state:
     st.session_state.step = 1
@@ -204,17 +221,128 @@ def open_review(query_set):
     st.rerun()
 
 
+def fmt_elapsed(seconds):
+    minutes, secs = divmod(int(seconds), 60)
+    return f"{minutes}:{secs:02d}"
+
+
 def write_queries(business, town, niche=None):
-    """Generate a query set, showing a calm error and stopping the page on failure."""
-    with st.spinner("Writing your test questions…"):
-        try:
-            return generate_queries(business, town, niche)
-        except FatalAPIError as e:
-            st.error(str(e))
-        except Exception as e:
-            print(f"[audit] query generation failed — {e}")
-            st.error("Couldn't write the questions just now. Please try again.")
+    """Generate a query set with a visible, ticking "working" panel. On failure,
+    shows a calm error and stops the page."""
+    panel = st.empty()
+    started = time.perf_counter()
+    shown = None
+    # the call runs on a worker so this thread can keep the clock moving
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        job = pool.submit(generate_queries, business, town, niche)
+        while True:
+            clock = fmt_elapsed(time.perf_counter() - started)
+            if clock != shown:
+                shown = clock
+                panel.markdown(
+                    f'<div class="geo-working"><span class="geo-pulse"></span>'
+                    f'<div class="geo-working-body"><div class="geo-working-title">Writing your test '
+                    f'questions…</div><div class="geo-working-sub">Working out what kind of business '
+                    f'{escape(business)} is, then writing 10 questions a customer might ask.</div></div>'
+                    f'<span class="geo-run-clock">{clock}</span></div>',
+                    unsafe_allow_html=True,
+                )
+            if job.done():
+                break
+            wait([job], timeout=TICK)
+    panel.empty()
+    try:
+        return job.result()
+    except FatalAPIError as e:
+        st.error(str(e))
+    except Exception as e:
+        print(f"[audit] query generation failed — {e}")
+        st.error("Couldn't write the questions just now. Please try again.")
     st.stop()
+
+
+def load_saved_run():
+    """The saved run, or None if there isn't a readable one."""
+    try:
+        with open(SAVED_RUN, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def start_job(kind, **details):
+    """Hand over to the loading page. The job is marked "pending" exactly once, so
+    a page rerun can never start (and pay for) the same audit twice."""
+    st.session_state.job = {"kind": kind, "state": "pending", **details}
+    st.session_state.step = 3
+    st.rerun()
+
+
+def loading_page(title, sub, queries, note=None):
+    """Draw the loading page and return the `report(statuses, stage)` callback that
+    keeps it up to date: a clock that ticks every second, one row per question
+    (waiting → done), and the extraction step."""
+    question("Running audit", title, sub)
+    if note:
+        st.markdown(f'<div class="geo-note">{escape(note)}</div>', unsafe_allow_html=True)
+    summary, listing = st.empty(), st.empty()
+    started = time.perf_counter()
+    last = {"summary": None, "listing": None}        # only redraw what changed (keeps animations smooth)
+    total = len(queries)
+    marks = {
+        "waiting": ('is-waiting', '<span class="geo-pulse"></span>', "Waiting"),
+        "done": ('is-done', '<span class="geo-tick">✓</span>', "Done"),
+        "failed": ('is-failed', '<span class="geo-dash">–</span>', "No answer"),
+    }
+
+    def row(cls, mark, text, state):
+        return (f'<div class="geo-run-row {cls}">{mark}<span class="geo-run-text">{text}</span>'
+                f'<span class="geo-run-state">{state}</span></div>')
+
+    def report(statuses, stage):
+        answered = sum(1 for s in statuses if s != "waiting")
+        pct = round(answered / total * 100) if total else 0
+        html = (f'<div class="geo-run-head"><span class="geo-run-count">{answered} of {total} answered</span>'
+                f'<span class="geo-run-clock">{fmt_elapsed(time.perf_counter() - started)}</span></div>'
+                f'<div class="geo-rankbar-track"><div class="geo-rankbar-fill is-live" '
+                f'style="width:{pct}%"></div></div>')
+        if html != last["summary"]:
+            last["summary"] = html
+            summary.markdown(html, unsafe_allow_html=True)
+
+        rows = "".join(row(*marks[s][:2], escape(q["query"]), marks[s][2]) for q, s in zip(queries, statuses))
+        step = {"searching": "waiting", "extracting": "waiting", "finished": "done"}[stage]
+        step_state = {"searching": "Up next", "extracting": "Working", "finished": "Done"}[stage]
+        step_cls = marks[step][0] + (" is-queued" if stage == "searching" else "")
+        rows += ('<div class="geo-run-divider"></div>'
+                 + row(step_cls, marks[step][1], "Finding the businesses mentioned…", step_state))
+        if rows != last["listing"]:
+            last["listing"] = rows
+            listing.markdown(rows, unsafe_allow_html=True)
+
+    return report
+
+
+def replay_sample(run, report):
+    """Play a saved run back through the loading page. No API calls: the answers
+    already exist, they just "arrive" one at a time at a fixed, sped-up pace."""
+    statuses = ["waiting"] * len(run["queries"])
+    order = list(range(len(statuses)))
+    random.Random(0).shuffle(order)                  # arrive out of order, like a live run
+
+    def pause(seconds, stage):
+        end = time.perf_counter() + seconds
+        while time.perf_counter() < end:
+            report(statuses, stage)
+            time.sleep(TICK)
+
+    for i in order:
+        pause(0.5, "searching")
+        statuses[i] = "done"
+    report(statuses, "searching")
+    if run.get("businesses") is not None:
+        pause(1.5, "extracting")
+    report(statuses, "finished")
 
 
 if st.session_state.step == 1:
@@ -237,6 +365,17 @@ if st.session_state.step == 1:
                     query_set = write_queries(business, town)
                     query_set["saved_at"] = None
                 open_review(query_set)
+
+    sample = load_saved_run()
+    if sample and sample.get("queries"):
+        st.markdown(
+            f'<div class="geo-nudge">Just looking? Watch a saved audit of '
+            f'<b>{escape(sample["business"])}</b> in {escape(sample.get("location", ""))} play back. '
+            f'It makes no live searches.</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Watch a sample audit", key="btn_sample"):
+            start_job("sample")
 
 elif st.session_state.step == 2:
     qs = st.session_state.qs
@@ -300,19 +439,63 @@ elif st.session_state.step == 2:
         if col2.button("Run audit", type="primary", disabled=bool(problems),
                        use_container_width=True, key="btn_run"):
             querygen.save_query_set(business, town, qs["niche"], qs["queries"])
-            ok, failed, fatal = run_audit(business, qs["niche"], town, qs["queries"])
-            if not ok:
-                st.error(
-                    f"{fatal} Nothing was saved." if fatal else
-                    "Couldn't reach the search API — nothing was saved. "
-                    "Check your API key and connection, then try again."
-                )
-            elif failed:
-                st.warning(
-                    f"{failed} of {len(qs['queries'])} queries failed and were skipped — "
-                    f"your results cover the rest."
-                    + (f" {fatal}" if fatal else "")
-                )
-                st.page_link("pages/results.py", label="View your results →")
-            else:
+            start_job("live")
+
+elif st.session_state.step == 3:
+    job = st.session_state.get("job") or {"kind": "live", "state": "interrupted"}
+
+    with st.container(border=True):
+        if job["state"] == "pending" and job["kind"] == "sample":
+            job["state"] = "running"
+            run = load_saved_run()
+            report = loading_page(
+                f"Replaying a saved audit of {run['business']}",
+                "This is how a live audit looks while it runs.",
+                run["queries"],
+                note=f"Sample replay of the audit saved on {run.get('run_at', '').replace('T', ' at ')}, "
+                     f"sped up. No live searches are being made.",
+            )
+            replay_sample(run, report)
+            st.session_state.step = 1
+            del st.session_state["job"]
+            st.switch_page("pages/results.py")
+
+        elif job["state"] == "pending":
+            job["state"] = "running"                 # set before the first paid call
+            qs = st.session_state.qs
+            business, town = ans["business"], ans["town"]
+            report = loading_page(
+                f"Asking the AI about {qs['niche']} businesses in {town}",
+                f"Each question is a live AI search. {business} is never named in them.",
+                qs["queries"],
+            )
+            ok, failed, fatal = run_audit(business, qs["niche"], town, qs["queries"], report)
+            if ok:
+                if failed or fatal:
+                    notice = (f"{failed} of {len(qs['queries'])} questions got no answer and were "
+                              f"skipped, so these results cover the rest." if failed else
+                              "The list of businesses mentioned couldn't be built for this run.")
+                    st.session_state.run_notice = notice + (f" {fatal}" if fatal else "")
+                st.session_state.step = 1
+                del st.session_state["job"]
                 st.switch_page("pages/results.py")
+            job["state"] = "failed"
+            job["message"] = (f"{fatal} Nothing was saved." if fatal else
+                              "Couldn't reach the search API, so nothing was saved. "
+                              "Check your API key and connection, then try again.")
+            st.rerun()
+
+        elif job["state"] == "failed":
+            question("Running audit", "The audit didn't complete")
+            st.error(job["message"])
+            if st.button("Back to your questions", key="btn_back_to_review"):
+                st.session_state.step = 2
+                st.rerun()
+
+        else:                                        # the page reloaded mid-run: never start it again
+            question("Running audit", "This audit was interrupted")
+            st.info("The page reloaded while the audit was running, so its progress was lost here. "
+                    "It has not been started again. Go back to your questions to run it.")
+            if st.button("Back to your questions", key="btn_back_to_review"):
+                st.session_state.step = 2 if "qs" in st.session_state else 1
+                st.rerun()

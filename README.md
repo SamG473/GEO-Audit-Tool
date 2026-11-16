@@ -38,7 +38,9 @@ The running example throughout is **Lazarou Barbers** — a barber in Cardiff.
    (SQLite). Running the same business again reuses exactly the same questions,
    so two runs are comparable.
 5. **Audit pipeline** (`run_audit`): the 10 questions go to the model with the
-   `web_search` tool, concurrently, with a live "X of 10 answered" progress bar.
+   `web_search` tool, concurrently. A separate loading page lists the 10
+   questions and ticks each one off as its answer arrives, with a running clock.
+   "Watch a sample audit" replays the saved run through the same page for free.
    Every query → answer (plus cited sources) is saved to
    [latest_run.json](latest_run.json).
 6. **Competitors from the answers** ([extraction.py](extraction.py)): one more cheap

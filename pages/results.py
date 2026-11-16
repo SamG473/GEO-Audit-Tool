@@ -41,6 +41,11 @@ st.markdown(
 )
 
 
+notice = st.session_state.pop("run_notice", None)      # set by the loading page, shown once
+if notice:
+    st.markdown(f'<div class="geo-note">{escape(notice)}</div>', unsafe_allow_html=True)
+
+
 @st.cache_data(show_spinner=False)
 def detect_cached(name, answer, category, location):
     return detect(name, answer, category, location)
