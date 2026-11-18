@@ -2,11 +2,7 @@
 
 This tool measures how often an AI search assistant recommends a business.
 
-More people now ask an AI assistant "who's the best barber in Cardiff?" instead
-of scrolling through search results. If the answer doesn't mention your
-business, you're invisible to them. The tool asks an AI a set of realistic
-customer questions, then counts how many of the answers mention the business.
-That count is its **share of voice**.
+More people now ask AI questions like: "who's the best barber in Cardiff?", than traditional search engines. If the answer doesn't mention your business, you're invisible to them. This tool asks an AI a set of realistic customer questions, tailored to your niche, then provides an analysis of the results.
 
 The screenshots below come from the built-in demo, which uses a made-up
 business called **Northgate Barbers**. The detection examples use **Lazarou
